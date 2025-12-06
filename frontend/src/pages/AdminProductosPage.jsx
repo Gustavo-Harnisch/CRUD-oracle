@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { fetchProductos, createProducto } from "../services/adminService";
+import { fetchProductos, createProducto, deleteProducto } from "../services/adminService";
 
 const AdminProductosPage = () => {
   const [productos, setProductos] = useState([]);
   const [form, setForm] = useState({ nombre: "", tipo: "", precio: "", cantidad: "", stock: "" });
   const [message, setMessage] = useState(null);
   const [error, setError] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
 
   const load = async () => {
     try {
@@ -37,6 +38,21 @@ const AdminProductosPage = () => {
       load();
     } catch (err) {
       setError(err?.response?.data?.message || "No se pudo crear el producto");
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm("¿Eliminar este producto?")) return;
+    setDeletingId(id);
+    setError(null);
+    try {
+      await deleteProducto(id);
+      setProductos((prev) => prev.filter((p) => p.COD_PRODUCTO !== id));
+      setMessage("Producto eliminado");
+    } catch (err) {
+      setError(err?.response?.data?.message || "No se pudo eliminar el producto");
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -119,6 +135,7 @@ const AdminProductosPage = () => {
                   <th>Precio</th>
                   <th>Cantidad</th>
                   <th>Stock</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
@@ -130,6 +147,16 @@ const AdminProductosPage = () => {
                     <td>{p.PRECIO_PRODUCTO}</td>
                     <td>{p.CANTIDAD_PRODUCTO}</td>
                     <td>{p.STOCK_PRODUCTO}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="btn btn-outline-danger btn-sm"
+                        onClick={() => handleDelete(p.COD_PRODUCTO)}
+                        disabled={deletingId === p.COD_PRODUCTO}
+                      >
+                        {deletingId === p.COD_PRODUCTO ? "Eliminando..." : "Eliminar"}
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>

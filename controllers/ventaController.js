@@ -9,10 +9,11 @@ async function listarVentas(req, res) {
       SELECT 
         COD_VENTA,
         COD_USUARIO,
+        NOMBRE_USUARIO,
         COD_EMPLEADO,
         FECHA_VENTA,
         VALOR_TOTAL
-      FROM JRGY_VENTA
+      FROM VW_VENTAS
       ORDER BY COD_VENTA
     `);
     res.json({ ok: true, data: result.rows });
@@ -31,7 +32,7 @@ async function obtenerVenta(req, res) {
   try {
     conn = await getConnection();
     const result = await conn.execute(
-      `SELECT * FROM JRGY_VENTA WHERE COD_VENTA = :id`,
+      `SELECT * FROM VW_VENTAS WHERE COD_VENTA = :id`,
       { id }
     );
 

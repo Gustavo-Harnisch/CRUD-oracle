@@ -10,6 +10,20 @@ const AdminRolesPage = () => {
   const [message, setMessage] = useState(null);
   const [error, setError] = useState(null);
 
+  const userNameById = (id) => {
+    const found = users.find((u) => String(u.COD_USUARIO) === String(id));
+    if (found) {
+      const nombre = `${found.NOMBRE_USUARIO || found.name || ""}`.trim();
+      return nombre || id;
+    }
+    return id;
+  };
+
+  const roleNameById = (id) => {
+    const found = roles.find((r) => String(r.COD_ROL) === String(id));
+    return found ? found.NOMBRE_ROL || id : id;
+  };
+
   const load = async () => {
     const calls = [fetchRoles(), fetchUsuarioRoles(), fetchUsers()];
     const results = await Promise.allSettled(calls);
@@ -178,8 +192,8 @@ const AdminRolesPage = () => {
               <tbody>
                 {usuarioRoles.map((ur) => (
                   <tr key={`${ur.COD_USUARIO}-${ur.COD_ROL}`}>
-                    <td>{ur.COD_USUARIO}</td>
-                    <td>{ur.COD_ROL}</td>
+                    <td>{userNameById(ur.COD_USUARIO)}</td>
+                    <td>{roleNameById(ur.COD_ROL)}</td>
                     <td>
                       <button
                         className="btn btn-outline-danger btn-sm"

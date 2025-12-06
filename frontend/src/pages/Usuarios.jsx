@@ -20,6 +20,7 @@ const Usuarios = () => {
   const [savingRoleId, setSavingRoleId] = useState(null);
 
   const rolesMap = useMemo(() => {
+    // Mapa de rol_id -> nombre para desplegar en lista
     const map = {};
     roles.forEach((r) => {
       map[r.COD_ROL] = r.NOMBRE_ROL;
@@ -32,6 +33,7 @@ const Usuarios = () => {
       setIsLoading(true);
       setError(null);
       try {
+        // Carga usuarios + roles + asignaciones en paralelo
         const [uRes, rRes, urRes] = await Promise.all([
           getUsers(),
           fetchRoles(),
@@ -94,6 +96,7 @@ const Usuarios = () => {
     setSavingRoleId(userId);
     setError(null);
     try {
+      // Quitamos asignaciones previas y dejamos solo la elegida
       const currentRoles = usuarioRoles.filter((ur) => ur.COD_USUARIO === userId);
       const tasks = [];
       currentRoles.forEach((ur) => {

@@ -6,8 +6,6 @@ const HeroSection = ({
   primaryLabel,
   primaryHref,
   primaryOnClick,
-  secondaryLabel,
-  secondaryHref,
   minHeight = "calc(100vh - 5.5rem)",
   overlayOpacity = 0.5,
 }) => {
@@ -43,11 +41,6 @@ const HeroSection = ({
                 {primaryLabel}
               </button>
             ) : null}
-            {secondaryHref && (
-              <a href={secondaryHref} className="btn btn-outline-light">
-                {secondaryLabel}
-              </a>
-            )}
           </div>
         </div>
       </div>

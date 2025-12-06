@@ -1,5 +1,28 @@
 // src/components/CardImageShow.jsx
-const CardImageShow = ({ image, alt, title, text, linkHref, linkLabel }) => {
+import { Link } from "react-router-dom";
+
+const CardImageShow = ({ image, alt, title, text, linkHref, linkLabel, onLinkClick }) => {
+  const renderAction = () => {
+    if (!linkHref && !onLinkClick) return null;
+
+    const sharedClass = "btn btn-outline-primary btn-sm align-self-start";
+    const label = linkLabel || "Ver mas";
+
+    if (onLinkClick) {
+      return (
+        <button type="button" className={sharedClass} onClick={onLinkClick}>
+          {label}
+        </button>
+      );
+    }
+
+    return (
+      <Link className={sharedClass} to={linkHref}>
+        {label}
+      </Link>
+    );
+  };
+
   return (
     <div
       className="card h-100 card-image-show mx-auto"
@@ -13,11 +36,7 @@ const CardImageShow = ({ image, alt, title, text, linkHref, linkLabel }) => {
       <div className="card-body d-flex flex-column">
         <h5 className="card-title">{title}</h5>
         <p className="card-text flex-grow-1">{text}</p>
-        {linkHref && (
-          <a className="btn btn-outline-primary btn-sm align-self-start" href={linkHref}>
-            {linkLabel || "Ver más"}
-          </a>
-        )}
+        {renderAction()}
       </div>
     </div>
   );

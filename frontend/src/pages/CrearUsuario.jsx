@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createUser } from "../services/userService";
+import { fetchRoles, assignUsuarioRol } from "../services/adminService";
 
 const CrearUsuario = () => {
   const navigate = useNavigate();
@@ -12,8 +13,22 @@ const CrearUsuario = () => {
     role: "",
     password: "",
   });
+  const [roles, setRoles] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const loadRoles = async () => {
+      try {
+        const res = await fetchRoles();
+        const list = res?.data?.data || res?.data || [];
+        setRoles(Array.isArray(list) ? list : []);
+      } catch (err) {
+        /* ignore roles load errors */
+      }
+    };
+    loadRoles();
+  }, []);
 
   const handleChange = (event) => {
     const { name, value } = event.target;
@@ -26,7 +41,17 @@ const CrearUsuario = () => {
     setError(null);
 
     try {
-      await createUser(formData);
+      const body = {
+        nombre: formData.name,
+        email: formData.email,
+        contrasena: formData.password,
+      };
+      const res = await createUser(body); // crea en BD
+      const newId = res?.data?.id ?? res?.data?.data?.id;
+      if (formData.role && newId) {
+        // asigna rol seleccionado en tabla de asignaciones
+        await assignUsuarioRol({ cod_usuario: Number(newId), cod_rol: Number(formData.role) });
+      }
       navigate("/admin/users");
     } catch (err) {
       setError(
@@ -86,8 +111,11 @@ const CrearUsuario = () => {
             required
           >
             <option value="">Selecciona un rol</option>
-            <option value="admin">Admin</option>
-            <option value="user">Usuario</option>
+            {roles.map((r) => (
+              <option key={r.COD_ROL} value={r.COD_ROL}>
+                {r.NOMBRE_ROL}
+              </option>
+            ))}
           </select>
         </div>
 

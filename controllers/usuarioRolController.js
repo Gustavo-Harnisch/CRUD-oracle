@@ -51,21 +51,50 @@ async function obtenerUsuarioRol(req, res) {
 // POST /api/usuario-roles
 async function crearUsuarioRol(req, res) {
   const { cod_usuario, cod_rol } = req.body;
+  const usuarioId = Number(cod_usuario);
+  const rolId = Number(cod_rol);
+
+  if (!usuarioId || !rolId) {
+    return res.status(400).json({ ok: false, message: "cod_usuario y cod_rol son requeridos" });
+  }
+
+  if (Number.isNaN(usuarioId) || Number.isNaN(rolId)) {
+    return res.status(400).json({ ok: false, message: "cod_usuario y cod_rol deben ser numericos" });
+  }
+
   let conn;
   try {
     conn = await getConnection();
+
+    // Evitar violar la PK compuesta si el rol ya esta asignado
+    const existing = await conn.execute(
+      `
+      SELECT 1
+      FROM JRGY_USUARIO_ROL
+      WHERE COD_USUARIO = :usuarioId AND COD_ROL = :rolId
+    `,
+      { usuarioId, rolId }
+    );
+
+    if (existing.rows.length > 0) {
+      return res.status(409).json({ ok: false, message: "El usuario ya tiene asignado este rol" });
+    }
+
     await conn.execute(
       `
       INSERT INTO JRGY_USUARIO_ROL (COD_USUARIO, COD_ROL)
       VALUES (:cod_usuario, :cod_rol)
     `,
-      { cod_usuario, cod_rol },
+      { cod_usuario: usuarioId, cod_rol: rolId },
       { autoCommit: true }
     );
 
     res.json({ ok: true, message: "Relacion usuario-rol creada" });
   } catch (err) {
     console.error(err);
+    if (err.code === "ORA-00001" || err.errorNum === 1) {
+      return res.status(409).json({ ok: false, message: "El usuario ya tiene asignado este rol" });
+    }
     res.status(500).json({ ok: false, error: err.message });
   } finally {
     if (conn) await conn.close();

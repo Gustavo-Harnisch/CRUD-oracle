@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { getUserById, updateUser } from "../services/userService";
+import { fetchRoles, fetchUsuarioRoles, assignUsuarioRol, deleteUsuarioRol } from "../services/adminService";
 
 const EditarUsuario = () => {
   const { id } = useParams();
@@ -12,6 +13,8 @@ const EditarUsuario = () => {
     role: "",
     password: "",
   });
+  const [roles, setRoles] = useState([]);
+  const [usuarioRoles, setUsuarioRoles] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
@@ -20,11 +23,24 @@ const EditarUsuario = () => {
     const fetchUser = async () => {
       setError(null);
       try {
-        const { data } = await getUserById(id);
+        // Carga usuario + catálogo de roles + asignaciones para precargar select
+        const [userRes, rolesRes, urRes] = await Promise.all([
+          getUserById(id),
+          fetchRoles(),
+          fetchUsuarioRoles(),
+        ]);
+        const user = userRes?.data?.data || userRes?.data || {};
+        const listRoles = rolesRes?.data?.data || rolesRes?.data || [];
+        setRoles(Array.isArray(listRoles) ? listRoles : []);
+        const listUr = urRes?.data?.data || urRes?.data || [];
+        setUsuarioRoles(Array.isArray(listUr) ? listUr : []);
+        const assigned = (Array.isArray(listUr) ? listUr : []).find(
+          (ur) => String(ur.COD_USUARIO) === String(id)
+        );
         setFormData({
-          name: data?.name || "",
-          email: data?.email || "",
-          role: data?.role || "",
+          name: user.NOMBRE_USUARIO ?? user.name ?? "",
+          email: user.EMAIL_USUARIO ?? user.email ?? "",
+          role: assigned ? String(assigned.COD_ROL) : "",
           password: "",
         });
       } catch (err) {
@@ -51,7 +67,32 @@ const EditarUsuario = () => {
     setError(null);
 
     try {
-      await updateUser(id, formData);
+      const body = {
+        nombre: formData.name,
+        email: formData.email,
+      };
+      if (formData.password) {
+        body.contrasena = formData.password;
+      }
+      await updateUser(id, body); // actualiza datos base
+
+      // Actualiza rol: elimina actuales y asigna el nuevo (si hay)
+      const currentAssignments = usuarioRoles.filter((ur) => String(ur.COD_USUARIO) === String(id));
+      const targetRole = formData.role ? Number(formData.role) : null;
+
+      const tasks = [];
+      currentAssignments.forEach((ur) => {
+        if (!targetRole || ur.COD_ROL !== targetRole) {
+          tasks.push(deleteUsuarioRol(Number(id), ur.COD_ROL));
+        }
+      });
+      if (targetRole && !currentAssignments.find((ur) => ur.COD_ROL === targetRole)) {
+        tasks.push(assignUsuarioRol({ cod_usuario: Number(id), cod_rol: targetRole }));
+      }
+      if (tasks.length) {
+        await Promise.all(tasks);
+      }
+
       navigate("/admin/users");
     } catch (err) {
       setError(
@@ -119,8 +160,11 @@ const EditarUsuario = () => {
             required
           >
             <option value="">Selecciona un rol</option>
-            <option value="admin">Admin</option>
-            <option value="user">Usuario</option>
+            {roles.map((r) => (
+              <option key={r.COD_ROL} value={r.COD_ROL}>
+                {r.NOMBRE_ROL}
+              </option>
+            ))}
           </select>
         </div>
 

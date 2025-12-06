@@ -5,24 +5,23 @@ async function listarReservas(req, res) {
   let conn;
   try {
     conn = await getConnection();
+    // Usa vista enriquecida (VW_PAGOS_HAB) para entregar usuario/email/habitación y totales listos
     const result = await conn.execute(`
       SELECT 
-        ph.COD_PAGO_HABITACION,
-        ph.FECHA_PAGO,
-        ph.VALOR_TOTAL_PAGO,
-        ph.COD_USUARIO,
-        ph.ESTADO AS ESTADO_PAGO,
-        dph.COD_HABITACION,
-        dph.FECHA_ESTADIA,
-        dph.DIAS,
-        dph.PRECIO_HABITACION,
-        h.NRO_HABITACION,
-        u.EMAIL_USUARIO
-      FROM JRGY_PAGO_HABITACION ph
-      LEFT JOIN JRGY_DETALLE_PAGO_HABITACION dph ON dph.COD_PAGO_HABITACION = ph.COD_PAGO_HABITACION
-      LEFT JOIN JRGY_HABITACION h ON h.COD_HABITACION = dph.COD_HABITACION
-      LEFT JOIN JRGY_USUARIO u ON u.COD_USUARIO = ph.COD_USUARIO
-      ORDER BY ph.COD_PAGO_HABITACION DESC
+        COD_PAGO_HABITACION,
+        COD_USUARIO,
+        NOMBRE_USUARIO,
+        EMAIL_USUARIO,
+        COD_HABITACION,
+        NRO_HABITACION,
+        VALOR_TOTAL_PAGO,
+        ESTADO_PAGO,
+        FECHA_PAGO,
+        FECHA_ESTADIA,
+        DIAS,
+        PRECIO_HABITACION
+      FROM VW_PAGOS_HAB
+      ORDER BY COD_PAGO_HABITACION DESC
     `);
     res.json({ ok: true, data: result.rows });
   } catch (err) {
@@ -40,7 +39,23 @@ async function obtenerReserva(req, res) {
   try {
     conn = await getConnection();
     const result = await conn.execute(
-      `SELECT * FROM JRGY_PAGO_HABITACION WHERE COD_PAGO_HABITACION = :id`,
+      `
+      SELECT 
+        COD_PAGO_HABITACION,
+        COD_USUARIO,
+        NOMBRE_USUARIO,
+        EMAIL_USUARIO,
+        COD_HABITACION,
+        NRO_HABITACION,
+        VALOR_TOTAL_PAGO,
+        ESTADO_PAGO,
+        FECHA_PAGO,
+        FECHA_ESTADIA,
+        DIAS,
+        PRECIO_HABITACION
+      FROM VW_PAGOS_HAB
+      WHERE COD_PAGO_HABITACION = :id
+      `,
       { id }
     );
 

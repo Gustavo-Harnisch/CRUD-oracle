@@ -21,6 +21,7 @@ import EditarUsuario from "./pages/EditarUsuario";
 import NotFoundPage from "./pages/NotFoundPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 import AdminEmpleadosPage from "./pages/AdminEmpleadosPage";
+import AdminHabitacionesPage from "./pages/AdminHabitacionesPage";
 import AdminProductosPage from "./pages/AdminProductosPage";
 import AdminPedidosPage from "./pages/AdminPedidosPage";
 import AdminUbicacionesPage from "./pages/AdminUbicacionesPage";
@@ -58,6 +59,7 @@ function App() {
         >
           <Route path="/admin" element={<AdminDashboard />} />
           <Route path="/admin/empleados" element={<AdminEmpleadosPage />} />
+          <Route path="/admin/habitaciones" element={<AdminHabitacionesPage />} />
           <Route path="/admin/productos" element={<AdminProductosPage />} />
           <Route path="/admin/pedidos" element={<AdminPedidosPage />} />
           <Route path="/admin/ubicaciones" element={<AdminUbicacionesPage />} />

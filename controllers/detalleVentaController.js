@@ -6,8 +6,8 @@ async function listarDetalles(req, res) {
   try {
     conn = await getConnection();
     const result = await conn.execute(`
-      SELECT COD_VENTA, COD_PRODUCTO, CANTIDAD, PRECIO_PRODUCTO, PRECIO_TOTAL
-      FROM JRGY_DETALLE_VENTA
+      SELECT COD_VENTA, COD_PRODUCTO, NOMBRE_PRODUCTO, CANTIDAD, PRECIO_PRODUCTO, PRECIO_TOTAL
+      FROM VW_DETALLE_VENTA_EXT
       ORDER BY COD_VENTA, COD_PRODUCTO
     `);
     res.json({ ok: true, data: result.rows });
@@ -28,8 +28,8 @@ async function obtenerDetalle(req, res) {
     conn = await getConnection();
     const result = await conn.execute(
       `
-      SELECT COD_VENTA, COD_PRODUCTO, CANTIDAD, PRECIO_PRODUCTO, PRECIO_TOTAL
-      FROM JRGY_DETALLE_VENTA
+      SELECT COD_VENTA, COD_PRODUCTO, NOMBRE_PRODUCTO, CANTIDAD, PRECIO_PRODUCTO, PRECIO_TOTAL
+      FROM VW_DETALLE_VENTA_EXT
       WHERE COD_VENTA = :ventaId AND COD_PRODUCTO = :productoId
     `,
       { ventaId, productoId }

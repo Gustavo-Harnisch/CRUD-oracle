@@ -25,11 +25,9 @@ const HomePage = () => {
       <HeroSection
         backgroundImage={homePhoto}
         title="Residencial Maule"
-        subtitle="Un Tesoro Cultural en el Corazón de Chile"
+        subtitle="Un Tesoro Cultural en el Corazon de Chile"
         primaryLabel="Reservar ahora"
         primaryOnClick={handleReserve}
-        secondaryLabel="Ver habitaciones"
-        secondaryHref="/rooms"
         overlayOpacity={0.5}
       />
 
@@ -40,8 +38,8 @@ const HomePage = () => {
               image={roomImg}
               alt="Habitaciones"
               title="Habitaciones"
-              text="Revisa la disponibilidad, tipos de habitación y detalles principales."
-              linkHref="/rooms"
+              text="Revisa la disponibilidad, tipos de habitacion y detalles principales."
+              onLinkClick={handleReserve}
               linkLabel="Ir a habitaciones"
             />
           </div>
@@ -51,7 +49,7 @@ const HomePage = () => {
               image={serviceImg}
               alt="Servicios"
               title="Servicios"
-              text="Conoce los servicios que ofrece la Residencial del Maule a sus huéspedes."
+              text="Conoce los servicios que ofrece la Residencial del Maule a sus huespedes."
               linkHref="/services"
               linkLabel="Ver servicios"
             />
@@ -62,7 +60,7 @@ const HomePage = () => {
               image={contactImg}
               alt="Contacto"
               title="Contacto"
-              text="¿Dudas, reportes, reservas especiales o grupos? Escríbenos directamente."
+              text="Dudas, reportes, reservas especiales o grupos? Escribenos directamente."
               linkHref="/contact"
               linkLabel="Ir a contacto"
             />
