@@ -22,6 +22,7 @@ const UserForm = memo(
     onCancel,
     includePassword = true,
     passwordOptional = false,
+    phoneRequired = false,
   }) => {
     const [formData, setFormData] = useState({ ...defaultValues, ...initialValues });
 
@@ -80,7 +81,7 @@ const UserForm = memo(
           type="tel"
           value={formData.telefono}
           onChange={handleChange}
-          required
+          required={phoneRequired}
         />
 
         <FormField

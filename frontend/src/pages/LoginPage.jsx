@@ -15,19 +15,24 @@ const Card = ({ title, children, footer }) => (
   </div>
 );
 
+const initialFormState = {
+  name: "",
+  apellido1: "",
+  apellido2: "",
+  telefono: "",
+  email: "",
+  password: "",
+  confirmPassword: "",
+};
+
+const phoneRegex = /^[0-9]{7,15}$/;
+
 const LoginPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { login, register } = useAuth();
 
-  const [formData, setFormData] = useState({
-    name: "",
-    apellido1: "",
-    apellido2: "",
-    telefono: "",
-    email: "",
-    password: "",
-  });
+  const [formData, setFormData] = useState(initialFormState);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRegisterMode, setIsRegisterMode] = useState(false);
   const [error, setError] = useState(null);
@@ -37,10 +42,41 @@ const LoginPage = () => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  const validateRegister = () => {
+    if (!formData.name.trim() || !formData.apellido1.trim()) {
+      return "Nombre y apellido paterno son obligatorios.";
+    }
+    if (!formData.email.trim() || !formData.password) {
+      return "Correo y contraseña son obligatorios.";
+    }
+    if (formData.password !== formData.confirmPassword) {
+      return "Las contraseñas no coinciden.";
+    }
+    if (formData.telefono && !phoneRegex.test(formData.telefono.trim())) {
+      return "Teléfono inválido, usa 7-15 dígitos sin símbolos.";
+    }
+    return null;
+  };
+
+  const resolveRedirect = (roles) => {
+    if (roles.includes("ADMIN")) return "/admin";
+    if (roles.includes("EMPLOYEE")) return "/employee";
+    return "/customer";
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
-    setIsSubmitting(true);
     setError(null);
+
+    if (isRegisterMode) {
+      const validationError = validateRegister();
+      if (validationError) {
+        setError(validationError);
+        return;
+      }
+    }
+
+    setIsSubmitting(true);
 
     try {
       const action = isRegisterMode ? register : login;
@@ -49,7 +85,7 @@ const LoginPage = () => {
             name: formData.name,
             apellido1: formData.apellido1,
             apellido2: formData.apellido2,
-            telefono: formData.telefono,
+            telefono: formData.telefono?.trim() || undefined,
             email: formData.email,
             password: formData.password,
             role: "USER",
@@ -62,7 +98,7 @@ const LoginPage = () => {
         : auth?.user?.role
           ? [String(auth.user.role).toUpperCase()]
           : [];
-      const fallback = userRoles.includes("ADMIN") ? "/admin" : "/";
+      const fallback = resolveRedirect(userRoles);
       const redirectTo = location.state?.from?.pathname || fallback;
       navigate(redirectTo, { replace: true });
     } catch (err) {
@@ -85,6 +121,10 @@ const LoginPage = () => {
             className="btn btn-link p-0"
             onClick={() => {
               setIsRegisterMode((prev) => !prev);
+              setFormData((prev) => ({
+                ...initialFormState,
+                email: prev.email,
+              }));
               setError(null);
             }}
           >
@@ -128,7 +168,7 @@ const LoginPage = () => {
                 type="tel"
                 value={formData.telefono}
                 onChange={handleChange}
-                required
+                required={false}
               />
             </>
           )}
@@ -151,6 +191,17 @@ const LoginPage = () => {
             onChange={handleChange}
             required
           />
+
+          {isRegisterMode && (
+            <PasswordField
+              id="confirmPassword"
+              name="confirmPassword"
+              label="Confirmar contraseña"
+              value={formData.confirmPassword}
+              onChange={handleChange}
+              required
+            />
+          )}
 
           {error && <div className="alert alert-danger">{error}</div>}
 
