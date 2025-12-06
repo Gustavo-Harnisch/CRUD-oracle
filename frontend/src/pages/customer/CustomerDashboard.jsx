@@ -19,12 +19,26 @@ const CustomerDashboard = () => {
         <div className="col-md-4">
           <div className="card h-100 shadow-sm">
             <div className="card-body d-flex flex-column">
+              <h5 className="card-title">Nueva reserva</h5>
+              <p className="card-text text-muted flex-grow-1">
+                Selecciona fechas y tipo de habitación para calcular tu estadía.
+              </p>
+              <Link to="/customer/reservations" className="btn btn-primary btn-sm align-self-start">
+                Reservar ahora
+              </Link>
+            </div>
+          </div>
+        </div>
+
+        <div className="col-md-4">
+          <div className="card h-100 shadow-sm">
+            <div className="card-body d-flex flex-column">
               <h5 className="card-title">Mis reservas</h5>
               <p className="card-text text-muted flex-grow-1">
                 Consulta el estado de tus reservas actuales y pasadas.
               </p>
-              <Link to="/rooms" className="btn btn-primary btn-sm align-self-start">
-                Ver habitaciones
+              <Link to="/customer/bookings" className="btn btn-primary btn-sm align-self-start">
+                Ver historial
               </Link>
             </div>
           </div>

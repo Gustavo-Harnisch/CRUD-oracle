@@ -1,22 +1,21 @@
-// src/pages/RoomsPage.jsx
 import { useEffect, useState } from "react";
-import { fetchRooms } from "../services/roomService";
+import { fetchRooms } from "../../services/roomService";
 
-const RoomsPage = () => {
+const AdminRooms = () => {
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
     const load = async () => {
-      setLoading(true);
       setError("");
+      setLoading(true);
       try {
         const data = await fetchRooms();
         setRooms(data);
       } catch (err) {
         console.error(err);
-        setError("No se pudieron cargar las habitaciones");
+        setError("No se pudieron cargar las habitaciones.");
       } finally {
         setLoading(false);
       }
@@ -28,9 +27,9 @@ const RoomsPage = () => {
     <div className="container py-4">
       <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-3">
         <div>
-          <p className="text-uppercase text-muted mb-1 small">Habitaciones</p>
-          <h1 className="h4 mb-0">Catálogo de habitaciones</h1>
-          <p className="text-muted small mb-0">Datos en línea desde la base real.</p>
+          <p className="text-uppercase text-muted small mb-1">Admin · Habitaciones</p>
+          <h1 className="h4 mb-0">Catálogo y tarifas</h1>
+          <p className="text-muted small mb-0">Datos conectados a la base real.</p>
         </div>
         <span className="badge bg-success-subtle text-success border">Live</span>
       </div>
@@ -47,7 +46,7 @@ const RoomsPage = () => {
                 <th>Número</th>
                 <th>Tipo</th>
                 <th>Capacidad</th>
-                <th>Precio base / noche</th>
+                <th>Precio base</th>
                 <th>Estado</th>
               </tr>
             </thead>
@@ -57,7 +56,7 @@ const RoomsPage = () => {
                   <td>{room.id}</td>
                   <td>{room.numero}</td>
                   <td>{room.tipo}</td>
-                  <td>{room.capacidad} huésped(es)</td>
+                  <td>{room.capacidad}</td>
                   <td>$ {Number(room.precioBase || 0).toLocaleString()}</td>
                   <td>{room.estado || "N/D"}</td>
                 </tr>
@@ -70,4 +69,4 @@ const RoomsPage = () => {
   );
 };
 
-export default RoomsPage;
+export default AdminRooms;

@@ -7,12 +7,12 @@ const HeroSection = ({
   primaryHref,
   secondaryLabel,
   secondaryHref,
-  minHeight = "calc(100vh - 5.5rem)",
+  minHeight = "calc(100vh + var(--nav-offset, 70px))",
   overlayOpacity = 0.5,
 }) => {
   return (
     <section
-      className="position-relative text-white d-flex align-items-center justify-content-center text-center"
+      className="hero-section position-relative text-white d-flex align-items-center justify-content-center text-center"
       style={{
         minHeight,
         backgroundImage: `url(${backgroundImage})`,

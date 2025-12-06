@@ -2,6 +2,45 @@
 import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 
+const employeeCards = [
+  {
+    id: "agenda",
+    title: "Agenda y eventos",
+    text: "Organiza check-ins, check-outs y bloqueos diarios.",
+    linkHref: "/employee/agenda",
+    linkLabel: "Ir a agenda",
+  },
+  {
+    id: "clients",
+    title: "Clientes y check-in",
+    text: "Consulta llegadas, salidas y asignaciones pendientes.",
+    linkHref: "/employee/clients",
+    linkLabel: "Ver clientes",
+  },
+  {
+    id: "requests",
+    title: "Peticiones de huéspedes",
+    text: "Centraliza solicitudes y asigna responsables.",
+    linkHref: "/employee/requests",
+    linkLabel: "Gestionar peticiones",
+  },
+  {
+    id: "rooms",
+    title: "Habitaciones",
+    text: "Revisa disponibilidad y tarifas para apoyar reservas.",
+    linkHref: "/rooms",
+    linkLabel: "Ver habitaciones",
+  },
+  {
+    id: "contact",
+    title: "Contacto rápido",
+    text: "Envíanos feedback o reporta incidencias internas.",
+    linkHref: "/contact",
+    linkLabel: "Ir a contacto",
+    variant: "outline-primary",
+  },
+];
+
 const EmployeeDashboard = () => {
   const { user } = useAuth();
 
@@ -16,47 +55,22 @@ const EmployeeDashboard = () => {
       </div>
 
       <div className="row g-3">
-        <div className="col-md-4">
-          <div className="card h-100 shadow-sm">
-            <div className="card-body d-flex flex-column">
-              <h5 className="card-title">Habitaciones</h5>
-              <p className="card-text text-muted flex-grow-1">
-                Revisa disponibilidad, asignaciones y precios base.
-              </p>
-              <Link to="/rooms" className="btn btn-primary btn-sm align-self-start">
-                Ver habitaciones
-              </Link>
+        {employeeCards.map((card) => (
+          <div className="col-md-4" key={card.id}>
+            <div className="card h-100 shadow-sm">
+              <div className="card-body d-flex flex-column">
+                <h5 className="card-title">{card.title}</h5>
+                <p className="card-text text-muted flex-grow-1">{card.text}</p>
+                <Link
+                  to={card.linkHref}
+                  className={`btn btn-${card.variant || "primary"} btn-sm align-self-start`}
+                >
+                  {card.linkLabel}
+                </Link>
+              </div>
             </div>
           </div>
-        </div>
-
-        <div className="col-md-4">
-          <div className="card h-100 shadow-sm">
-            <div className="card-body d-flex flex-column">
-              <h5 className="card-title">Solicitudes admin</h5>
-              <p className="card-text text-muted flex-grow-1">
-                Pide acceso de administrador si necesitas gestionar usuarios.
-              </p>
-              <button className="btn btn-outline-secondary btn-sm" type="button" disabled>
-                Próximamente
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="col-md-4">
-          <div className="card h-100 shadow-sm">
-            <div className="card-body d-flex flex-column">
-              <h5 className="card-title">Contacto rápido</h5>
-              <p className="card-text text-muted flex-grow-1">
-                Envíanos feedback o reporta incidencias internas.
-              </p>
-              <Link to="/contact" className="btn btn-outline-primary btn-sm align-self-start">
-                Ir a contacto
-              </Link>
-            </div>
-          </div>
-        </div>
+        ))}
       </div>
     </div>
   );

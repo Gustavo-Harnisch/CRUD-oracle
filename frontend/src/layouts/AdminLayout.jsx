@@ -1,5 +1,6 @@
 import { Outlet } from "react-router-dom";
 import Navbar from "../components/Navbar";
+import PageStatusBadge from "../components/PageStatusBadge";
 
 const AdminLayout = () => {
   return (
@@ -10,6 +11,8 @@ const AdminLayout = () => {
       <main className="flex-grow-1">
         <Outlet />
       </main>
+
+      <PageStatusBadge />
     </div>
   );
 };

@@ -3,6 +3,9 @@ const authRoutes = require('./auth');
 const userRoutes = require('./users');
 const adminRequestRoutes = require('./adminRequests');
 const roleRoutes = require('./roles');
+const roomRoutes = require('./rooms');
+const experienceRoutes = require('./experiences');
+const reservationRoutes = require('./reservations');
 const { asyncHandler } = require('../utils/errors');
 const { withConnection } = require('../db');
 
@@ -12,6 +15,9 @@ router.use(authRoutes);
 router.use(userRoutes);
 router.use(adminRequestRoutes);
 router.use(roleRoutes);
+router.use(roomRoutes);
+router.use(experienceRoutes);
+router.use(reservationRoutes);
 
 router.get('/ping', (req, res) => {
   res.json({ ok: true });

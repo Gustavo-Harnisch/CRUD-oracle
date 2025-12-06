@@ -59,9 +59,9 @@ const LoginPage = () => {
   };
 
   const resolveRedirect = (roles) => {
-    if (roles.includes("ADMIN")) return "/admin";
-    if (roles.includes("EMPLOYEE")) return "/employee";
-    return "/customer";
+    if (roles.includes("ADMIN")) return "/admin/home";
+    if (roles.includes("EMPLOYEE")) return "/employee/home";
+    return "/customer/home";
   };
 
   const handleSubmit = async (event) => {
