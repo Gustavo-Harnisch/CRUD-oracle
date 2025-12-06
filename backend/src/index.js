@@ -2,11 +2,13 @@ const express = require('express');
 const cors = require('cors');
 const config = require('./config');
 const routes = require('./routes');
-const { initPool, closePool } = require('./db');
+const { initPool, closePool, withConnection } = require('./db');
 const { errorMiddleware } = require('./utils/errors');
+const { ensureBaseRoles } = require('./services/userService');
 
 async function bootstrap() {
   await initPool();
+  await withConnection((conn) => ensureBaseRoles(conn));
 
   const app = express();
 

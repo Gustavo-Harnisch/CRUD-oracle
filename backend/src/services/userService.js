@@ -1,4 +1,5 @@
 const { AppError } = require('../utils/errors');
+const config = require('../config');
 
 function normalizeRoleNames(roleNames) {
   const normalized = roleNames.map((r) => String(r || '').trim().toUpperCase()).filter(Boolean);
@@ -151,6 +152,34 @@ function ensureExists(entity, message) {
   }
 }
 
+async function ensureBaseRoles(conn) {
+  const baseRoles = normalizeRoleNames([
+    'USER',
+    'EMPLOYEE',
+    ...(config.adminRoles || [])
+  ]);
+
+  if (!baseRoles.length) {
+    return;
+  }
+
+  const { placeholders, binds } = buildNamedPlaceholders('r', baseRoles);
+  const existing = await conn.execute(
+    `SELECT UPPER(NOMBRE_ROL) AS NAME FROM JRGY_ROL WHERE UPPER(NOMBRE_ROL) IN (${placeholders})`,
+    binds
+  );
+  const existingNames = new Set((existing.rows || []).map((row) => row.NAME));
+  const missing = baseRoles.filter((role) => !existingNames.has(role));
+
+  for (const role of missing) {
+    await conn.execute('INSERT INTO JRGY_ROL (NOMBRE_ROL) VALUES (:role)', { role });
+  }
+
+  if (missing.length) {
+    await conn.commit();
+  }
+}
+
 module.exports = {
   assignRoles,
   fetchRolesMap,
@@ -159,5 +188,6 @@ module.exports = {
   fetchUsersWithRoles,
   findRoleIds,
   normalizeRoleNames,
-  ensureExists
+  ensureExists,
+  ensureBaseRoles
 };

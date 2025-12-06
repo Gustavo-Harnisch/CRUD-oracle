@@ -62,21 +62,21 @@ router.post(
 
     requireNonEmpty(name, 'nombre');
     requireNonEmpty(apellido1, 'apellido1');
-    requireNonEmpty(telefono, 'telefono');
     requireNonEmpty(email, 'correo');
     requireNonEmpty(password, 'contraseña');
     validateEmail(email);
-    validatePhone(telefono);
+    validatePhone(telefono, { optional: true });
     validateRoles(roleNames);
 
     const passwordHash = await bcrypt.hash(password, 10);
     const estadoActivo = 1;
+    const telefonoDb = telefono || null;
 
     await withConnection(async (conn) => {
       await requireUserFromToken(conn, extractToken(req), true);
       const roleIds = await findRoleIds(conn, roleNames);
       if (!roleIds.length) {
-        throw new AppError('Alguno de los roles no existe', 422);
+        throw new AppError('Rol solicitado no existe en catálogo. Reintenta más tarde o revisa los roles disponibles.', 422);
       }
 
       try {
@@ -90,7 +90,7 @@ router.post(
             name,
             ap1: apellido1,
             ap2: apellido2 || null,
-            tel: telefono,
+            tel: telefonoDb,
             email,
             passwordHash,
             estado: estadoActivo,
@@ -133,17 +133,16 @@ router.put(
 
     requireNonEmpty(name, 'nombre');
     requireNonEmpty(apellido1, 'apellido1');
-    requireNonEmpty(telefono, 'telefono');
     requireNonEmpty(email, 'correo');
     validateEmail(email);
-    validatePhone(telefono);
+    validatePhone(telefono, { optional: true });
     validateRoles(roleNames);
 
     await withConnection(async (conn) => {
       await requireUserFromToken(conn, extractToken(req), true);
       const roleIds = await findRoleIds(conn, roleNames);
       if (!roleIds.length) {
-        throw new AppError('Alguno de los roles no existe', 422);
+        throw new AppError('Rol solicitado no existe en catálogo. Reintenta más tarde o revisa los roles disponibles.', 422);
       }
 
       const params = {
@@ -151,7 +150,7 @@ router.put(
         name,
         ap1: apellido1,
         ap2: apellido2 || null,
-        tel: telefono,
+        tel: telefono || null,
         email
       };
 

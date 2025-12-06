@@ -13,7 +13,10 @@ function validateEmail(email) {
   }
 }
 
-function validatePhone(phone) {
+function validatePhone(phone, { optional = false } = {}) {
+  if (optional && String(phone ?? '').trim() === '') {
+    return;
+  }
   if (!/^[0-9]{7,15}$/.test(phone)) {
     throw new AppError('Teléfono inválido, use solo dígitos (7-15)', 422);
   }

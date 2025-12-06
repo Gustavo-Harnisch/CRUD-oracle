@@ -29,7 +29,7 @@ const EditarUsuario = () => {
           name: data?.name || "",
           apellido1: data?.apellido1 || "",
           apellido2: data?.apellido2 || "",
-          telefono: data?.telefono || "",
+          telefono: data?.telefono ? String(data.telefono) : "",
           email: data?.email || "",
           role: Array.isArray(data?.roles) && data.roles.length ? data.roles[0] : data?.role || "",
           password: "",
