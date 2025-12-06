@@ -8,7 +8,8 @@ function buildToken() {
 
 async function generateToken(conn, userId) {
   const token = buildToken();
-  const expiresAt = new Date(Date.now() + config.tokenTtlHours * 60 * 60 * 1000).toISOString();
+  // Guardamos un objeto Date para que Oracle lo maneje como DATE y evitar ORA-01861
+  const expiresAt = new Date(Date.now() + config.tokenTtlHours * 60 * 60 * 1000);
 
   await conn.execute(
     'INSERT INTO tokens (user_id, token, expires_at) VALUES (:userId, :token, :expiresAt)',

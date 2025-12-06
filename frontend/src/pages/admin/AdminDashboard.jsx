@@ -3,11 +3,39 @@ import { Link } from "react-router-dom";
 
 const adminCards = [
   {
+    id: "inventory",
+    title: "Cuartos e inventario",
+    text: "Controla disponibilidad, bloqueos y existencias sin mezclarlo con otros flujos.",
+    linkHref: "/admin/inventory",
+    linkLabel: "Ir a inventario",
+  },
+  {
     id: "users",
     title: "Usuarios",
     text: "Revisa y administra las cuentas de usuarios del sistema.",
     linkHref: "/admin/users",
     linkLabel: "Gestionar usuarios",
+  },
+  {
+    id: "employees",
+    title: "Empleados",
+    text: "Organiza turnos, altas/bajas y procesos de onboarding.",
+    linkHref: "/admin/employees",
+    linkLabel: "Ver empleados",
+  },
+  {
+    id: "rates",
+    title: "Tarifas y promos",
+    text: "Configura precios, temporadas y campañas sin afectar otros módulos.",
+    linkHref: "/admin/rates",
+    linkLabel: "Configurar tarifas",
+  },
+  {
+    id: "audit",
+    title: "Auditoría y logs",
+    text: "Consulta eventos sensibles y exporta registros cuando lo necesites.",
+    linkHref: "/admin/audit",
+    linkLabel: "Ver logs",
   },
   {
     id: "requests",
@@ -21,9 +49,10 @@ const adminCards = [
 const AdminDashboard = () => {
   return (
     <div className="container py-4">
-      <h1 className="h3 mb-3">Panel de administración</h1>
+      <p className="text-uppercase text-muted mb-1 small">Administración</p>
+      <h1 className="h3 mb-1">Panel de administración</h1>
       <p className="text-muted">
-        Gestión completa de usuarios, roles y solicitudes.
+        Gestiona cada área en su propia página para mantener el código modular.
       </p>
 
       <div className="row g-3">

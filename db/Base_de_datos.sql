@@ -22,6 +22,7 @@ BEGIN
     safe_drop('DROP TRIGGER TRG_PK_EMPLEADO');
     safe_drop('DROP TRIGGER TRG_MISMA_PK_EMPLEADO');
     safe_drop('DROP TRIGGER TRG_PK_CLIENTE');
+    safe_drop('DROP TRIGGER TRG_PK_HABITACION');
     safe_drop('DROP TRIGGER TRG_PK_PRODUCTO');
     safe_drop('DROP TRIGGER TRG_MISMA_PK_PRODUCTO');
     safe_drop('DROP TRIGGER TRG_PK_ROL');
@@ -31,6 +32,11 @@ BEGIN
     safe_drop('DROP TRIGGER TRG_PK_VENTA');
     safe_drop('DROP TRIGGER TRG_PK_PAGO_HAB');
     safe_drop('DROP TRIGGER TRG_PK_SOLICITUD_ADMIN');
+    safe_drop('DROP TRIGGER TRG_PK_RESERVA');
+    safe_drop('DROP TRIGGER TRG_PK_EVENTO_RESERVA');
+    safe_drop('DROP TRIGGER TRG_PK_EXPERIENCIA');
+    safe_drop('DROP TRIGGER TRG_PK_RESERVA_EXP');
+    safe_drop('DROP TRIGGER TRG_RESERVA_NO_OVERLAP');
 
     -- Paquetes
     safe_drop('DROP PACKAGE BODY PKG_REPORTES');
@@ -95,6 +101,7 @@ BEGIN
     safe_drop('DROP TABLE JRGY_EMPLEADO CASCADE CONSTRAINTS');
     safe_drop('DROP TABLE JRGY_CLIENTE CASCADE CONSTRAINTS');
     safe_drop('DROP TABLE JRGY_PRODUCTO CASCADE CONSTRAINTS');
+    safe_drop('DROP TABLE JRGY_EXPERIENCIA CASCADE CONSTRAINTS');
     safe_drop('DROP TABLE JRGY_PROVEEDOR CASCADE CONSTRAINTS');
     safe_drop('DROP TABLE JRGY_CALLE CASCADE CONSTRAINTS');
     safe_drop('DROP TABLE JRGY_COMUNA CASCADE CONSTRAINTS');
@@ -108,11 +115,17 @@ BEGIN
     safe_drop('DROP TABLE JRGY_CAT_ESTADO_HABITACION CASCADE CONSTRAINTS');
     safe_drop('DROP TABLE JRGY_CAT_TIPO_HABITACION CASCADE CONSTRAINTS');
     safe_drop('DROP TABLE JRGY_CAT_MODO_PAGO CASCADE CONSTRAINTS');
+    safe_drop('DROP TABLE JRGY_CAT_ESTADO_RESERVA CASCADE CONSTRAINTS');
+    safe_drop('DROP TABLE JRGY_RESERVA_EXP CASCADE CONSTRAINTS');
+    safe_drop('DROP TABLE JRGY_RESERVA CASCADE CONSTRAINTS');
+    safe_drop('DROP TABLE JRGY_EVENTO_RESERVA CASCADE CONSTRAINTS');
+    safe_drop('DROP TABLE TOKENS CASCADE CONSTRAINTS');
 
     -- Secuencias
     safe_drop('DROP SEQUENCE SQ_PK_USUARIO');
     safe_drop('DROP SEQUENCE SQ_PK_EMPLEADO');
     safe_drop('DROP SEQUENCE SQ_PK_CLIENTE');
+    safe_drop('DROP SEQUENCE SQ_PK_HABITACION');
     safe_drop('DROP SEQUENCE SQ_PK_PRODUCTO');
     safe_drop('DROP SEQUENCE SQ_PK_PEDIDO');
     safe_drop('DROP SEQUENCE SQ_PK_ROL');
@@ -121,6 +134,10 @@ BEGIN
     safe_drop('DROP SEQUENCE SQ_PK_VENTA');
     safe_drop('DROP SEQUENCE SQ_PK_PAGO_HAB');
     safe_drop('DROP SEQUENCE SQ_PK_SOLICITUD_ADMIN');
+    safe_drop('DROP SEQUENCE SQ_PK_RESERVA');
+    safe_drop('DROP SEQUENCE SQ_PK_EVENTO_RESERVA');
+    safe_drop('DROP SEQUENCE SQ_PK_EXPERIENCIA');
+    safe_drop('DROP SEQUENCE SQ_PK_RESERVA_EXP');
 END;
 /
 
@@ -154,6 +171,12 @@ CREATE TABLE JRGY_CAT_MODO_PAGO (
     COD_MODO_PAGO NUMBER,
     MODO_PAGO VARCHAR2(30),
     CONSTRAINT PK_JRGY_CAT_MODO_PAGO PRIMARY KEY (COD_MODO_PAGO)
+);
+
+CREATE TABLE JRGY_CAT_ESTADO_RESERVA (
+    COD_ESTADO_RESERVA NUMBER,
+    ESTADO_RESERVA VARCHAR2(30),
+    CONSTRAINT PK_JRGY_CAT_ESTADO_RESERVA PRIMARY KEY (COD_ESTADO_RESERVA)
 );
 
 CREATE TABLE JRGY_REGION (
@@ -243,6 +266,16 @@ CREATE TABLE JRGY_PRODUCTO (
     CONSTRAINT PK_JRGY_PRODUCTO PRIMARY KEY (COD_PRODUCTO)
 );
 
+CREATE TABLE JRGY_EXPERIENCIA (
+    COD_EXPERIENCIA NUMBER,
+    NOMBRE VARCHAR2(100),
+    DESCRIPCION VARCHAR2(255),
+    PRECIO NUMBER,
+    TAG VARCHAR2(50),
+    ESTADO VARCHAR2(20),
+    CONSTRAINT PK_JRGY_EXPERIENCIA PRIMARY KEY (COD_EXPERIENCIA)
+);
+
 CREATE TABLE JRGY_EMPLEADO (
     COD_EMPLEADO NUMBER,
     COD_USUARIO NUMBER,
@@ -298,6 +331,56 @@ CREATE TABLE JRGY_HABITACION (
     CONSTRAINT FK_JRGY_HAB_TIPO FOREIGN KEY (COD_TIPO_HABITACION) REFERENCES JRGY_CAT_TIPO_HABITACION (COD_TIPO_HABITACION),
     CONSTRAINT FK_JRGY_HAB_ESTADO FOREIGN KEY (COD_ESTADO_HABITACION) REFERENCES JRGY_CAT_ESTADO_HABITACION (COD_ESTADO_HABITACION)
 );
+
+CREATE TABLE JRGY_RESERVA (
+    COD_RESERVA NUMBER,
+    COD_USUARIO NUMBER NOT NULL,
+    COD_HABITACION NUMBER NOT NULL,
+    FECHA_INICIO DATE NOT NULL,
+    FECHA_FIN DATE NOT NULL,
+    HUESPEDES NUMBER,
+    TOTAL NUMBER,
+    COD_ESTADO_RESERVA NUMBER,
+    CREATED_AT DATE DEFAULT SYSDATE,
+    UPDATED_AT DATE,
+    CONSTRAINT PK_JRGY_RESERVA PRIMARY KEY (COD_RESERVA),
+    CONSTRAINT FK_JRGY_RESERVA_USUARIO FOREIGN KEY (COD_USUARIO) REFERENCES JRGY_USUARIO (COD_USUARIO),
+    CONSTRAINT FK_JRGY_RESERVA_HAB FOREIGN KEY (COD_HABITACION) REFERENCES JRGY_HABITACION (COD_HABITACION),
+    CONSTRAINT FK_JRGY_RESERVA_ESTADO FOREIGN KEY (COD_ESTADO_RESERVA) REFERENCES JRGY_CAT_ESTADO_RESERVA (COD_ESTADO_RESERVA),
+    CONSTRAINT CHK_JRGY_RESERVA_FECHAS CHECK (FECHA_FIN >= FECHA_INICIO)
+);
+
+CREATE INDEX IDX_JRGY_RESERVA_USUARIO ON JRGY_RESERVA (COD_USUARIO);
+CREATE INDEX IDX_JRGY_RESERVA_HAB ON JRGY_RESERVA (COD_HABITACION, FECHA_INICIO, FECHA_FIN);
+
+CREATE TABLE JRGY_EVENTO_RESERVA (
+    COD_EVENTO_RESERVA NUMBER,
+    COD_RESERVA NUMBER NOT NULL,
+    TIPO_EVENTO VARCHAR2(50),
+    FECHA_EVENTO DATE,
+    NOTAS VARCHAR2(500),
+    CREATED_AT DATE DEFAULT SYSDATE,
+    CREATED_BY NUMBER,
+    CONSTRAINT PK_JRGY_EVENTO_RESERVA PRIMARY KEY (COD_EVENTO_RESERVA),
+    CONSTRAINT FK_JRGY_EVENTO_RESERVA_RES FOREIGN KEY (COD_RESERVA) REFERENCES JRGY_RESERVA (COD_RESERVA) ON DELETE CASCADE,
+    CONSTRAINT FK_JRGY_EVENTO_RESERVA_USER FOREIGN KEY (CREATED_BY) REFERENCES JRGY_USUARIO (COD_USUARIO)
+);
+
+CREATE INDEX IDX_JRGY_EVENTO_RESERVA_RES ON JRGY_EVENTO_RESERVA (COD_RESERVA);
+
+CREATE TABLE JRGY_RESERVA_EXP (
+    COD_RESERVA_EXP NUMBER,
+    COD_RESERVA NUMBER NOT NULL,
+    COD_EXPERIENCIA NUMBER NOT NULL,
+    CANTIDAD NUMBER DEFAULT 1,
+    PRECIO_UNITARIO NUMBER,
+    CONSTRAINT PK_JRGY_RESERVA_EXP PRIMARY KEY (COD_RESERVA_EXP),
+    CONSTRAINT FK_JRGY_RES_EXP_RESERVA FOREIGN KEY (COD_RESERVA) REFERENCES JRGY_RESERVA (COD_RESERVA) ON DELETE CASCADE,
+    CONSTRAINT FK_JRGY_RES_EXP_EXP FOREIGN KEY (COD_EXPERIENCIA) REFERENCES JRGY_EXPERIENCIA (COD_EXPERIENCIA)
+);
+
+CREATE INDEX IDX_JRGY_RESERVA_EXP_RES ON JRGY_RESERVA_EXP (COD_RESERVA);
+CREATE INDEX IDX_JRGY_RESERVA_EXP_EXP ON JRGY_RESERVA_EXP (COD_EXPERIENCIA);
 
 CREATE TABLE JRGY_PAGO_HABITACION (
     COD_PAGO_HABITACION NUMBER,
@@ -385,6 +468,17 @@ CREATE TABLE JRGY_PAGO_VENTA (
     CONSTRAINT FK_JRGY_PAGO_VENTA_MODO FOREIGN KEY (COD_MODO_PAGO) REFERENCES JRGY_CAT_MODO_PAGO (COD_MODO_PAGO)
 );
 
+CREATE TABLE TOKENS (
+    TOKEN VARCHAR2(128),
+    USER_ID NUMBER NOT NULL,
+    EXPIRES_AT DATE,
+    CREATED_AT DATE DEFAULT SYSDATE,
+    CONSTRAINT PK_TOKENS PRIMARY KEY (TOKEN),
+    CONSTRAINT FK_TOKENS_USUARIO FOREIGN KEY (USER_ID) REFERENCES JRGY_USUARIO (COD_USUARIO)
+);
+
+CREATE INDEX IDX_TOKENS_USER ON TOKENS (USER_ID);
+
 PROMPT Creacion de secuencias y triggers PK...
 -- 4) Secuencias y triggers para PK
 CREATE SEQUENCE SQ_PK_USUARIO START WITH 1 INCREMENT BY 1 NOMAXVALUE NOCYCLE;
@@ -406,6 +500,11 @@ END;
 CREATE SEQUENCE SQ_PK_CLIENTE START WITH 1 INCREMENT BY 1 NOMAXVALUE NOCYCLE;
 CREATE OR REPLACE TRIGGER TRG_PK_CLIENTE BEFORE INSERT ON JRGY_CLIENTE FOR EACH ROW
 BEGIN IF :NEW.COD_CLIENTE IS NULL THEN :NEW.COD_CLIENTE := SQ_PK_CLIENTE.NEXTVAL; END IF; END;
+/
+
+CREATE SEQUENCE SQ_PK_HABITACION START WITH 1 INCREMENT BY 1 NOMAXVALUE NOCYCLE;
+CREATE OR REPLACE TRIGGER TRG_PK_HABITACION BEFORE INSERT ON JRGY_HABITACION FOR EACH ROW
+BEGIN IF :NEW.COD_HABITACION IS NULL THEN :NEW.COD_HABITACION := SQ_PK_HABITACION.NEXTVAL; END IF; END;
 /
 
 CREATE SEQUENCE SQ_PK_EMPLEADO START WITH 1 INCREMENT BY 1 NOMAXVALUE NOCYCLE;
@@ -432,7 +531,23 @@ BEGIN
 END;
 /
 
+CREATE SEQUENCE SQ_PK_EXPERIENCIA START WITH 1 INCREMENT BY 1 NOMAXVALUE NOCYCLE;
+CREATE OR REPLACE TRIGGER TRG_PK_EXPERIENCIA BEFORE INSERT ON JRGY_EXPERIENCIA FOR EACH ROW
+BEGIN
+    IF :NEW.COD_EXPERIENCIA IS NULL THEN
+        :NEW.COD_EXPERIENCIA := SQ_PK_EXPERIENCIA.NEXTVAL;
+    END IF;
+END;
+/
+
 CREATE SEQUENCE SQ_PK_PEDIDO START WITH 1 INCREMENT BY 1 NOMAXVALUE NOCYCLE;
+CREATE OR REPLACE TRIGGER TRG_PK_PEDIDO BEFORE INSERT ON JRGY_PEDIDO FOR EACH ROW
+BEGIN
+    IF :NEW.COD_PEDIDO IS NULL THEN
+        :NEW.COD_PEDIDO := SQ_PK_PEDIDO.NEXTVAL;
+    END IF;
+END;
+/
 CREATE SEQUENCE SQ_PK_ROL START WITH 1 INCREMENT BY 1 NOMAXVALUE NOCYCLE;
 CREATE OR REPLACE TRIGGER TRG_PK_ROL BEFORE INSERT ON JRGY_ROL FOR EACH ROW
 BEGIN IF :NEW.COD_ROL IS NULL THEN :NEW.COD_ROL := SQ_PK_ROL.NEXTVAL; END IF; END;
@@ -461,6 +576,139 @@ BEGIN IF :NEW.COD_VENTA IS NULL THEN :NEW.COD_VENTA := SQ_PK_VENTA.NEXTVAL; END 
 CREATE SEQUENCE SQ_PK_PAGO_HAB START WITH 1 INCREMENT BY 1 NOMAXVALUE NOCYCLE;
 CREATE OR REPLACE TRIGGER TRG_PK_PAGO_HAB BEFORE INSERT ON JRGY_PAGO_HABITACION FOR EACH ROW
 BEGIN IF :NEW.COD_PAGO_HABITACION IS NULL THEN :NEW.COD_PAGO_HABITACION := SQ_PK_PAGO_HAB.NEXTVAL; END IF; END;
+/
+
+CREATE SEQUENCE SQ_PK_RESERVA START WITH 1 INCREMENT BY 1 NOMAXVALUE NOCYCLE;
+CREATE OR REPLACE TRIGGER TRG_PK_RESERVA BEFORE INSERT ON JRGY_RESERVA FOR EACH ROW
+BEGIN IF :NEW.COD_RESERVA IS NULL THEN :NEW.COD_RESERVA := SQ_PK_RESERVA.NEXTVAL; END IF; END;
+/
+
+CREATE SEQUENCE SQ_PK_EVENTO_RESERVA START WITH 1 INCREMENT BY 1 NOMAXVALUE NOCYCLE;
+CREATE OR REPLACE TRIGGER TRG_PK_EVENTO_RESERVA BEFORE INSERT ON JRGY_EVENTO_RESERVA FOR EACH ROW
+BEGIN IF :NEW.COD_EVENTO_RESERVA IS NULL THEN :NEW.COD_EVENTO_RESERVA := SQ_PK_EVENTO_RESERVA.NEXTVAL; END IF; END;
+/
+
+CREATE SEQUENCE SQ_PK_RESERVA_EXP START WITH 1 INCREMENT BY 1 NOMAXVALUE NOCYCLE;
+CREATE OR REPLACE TRIGGER TRG_PK_RESERVA_EXP BEFORE INSERT ON JRGY_RESERVA_EXP FOR EACH ROW
+BEGIN
+    IF :NEW.COD_RESERVA_EXP IS NULL THEN
+        :NEW.COD_RESERVA_EXP := SQ_PK_RESERVA_EXP.NEXTVAL;
+    END IF;
+END;
+/
+
+PROMPT Datos base para catalogos y roles...
+DECLARE
+    PROCEDURE ensure_cat_estado_usuario(p_codigo NUMBER, p_nombre VARCHAR2) IS
+    BEGIN
+        MERGE INTO JRGY_CAT_ESTADO_USUARIO t
+        USING (SELECT p_codigo AS COD, p_nombre AS NOM FROM dual) s
+        ON (UPPER(t.ESTADO_USUARIO) = UPPER(s.NOM))
+        WHEN NOT MATCHED THEN
+            INSERT (COD_ESTADO_USUARIO, ESTADO_USUARIO) VALUES (s.COD, s.NOM);
+    END;
+
+    PROCEDURE ensure_cat_estado_laboral(p_codigo NUMBER, p_nombre VARCHAR2) IS
+    BEGIN
+        MERGE INTO JRGY_CAT_ESTADO_LABORAL t
+        USING (SELECT p_codigo AS COD, p_nombre AS NOM FROM dual) s
+        ON (UPPER(t.ESTADO_LABORAL) = UPPER(s.NOM))
+        WHEN NOT MATCHED THEN
+            INSERT (COD_ESTADO_LABORAL, ESTADO_LABORAL) VALUES (s.COD, s.NOM);
+    END;
+
+    PROCEDURE ensure_cat_estado_hab(p_codigo NUMBER, p_nombre VARCHAR2) IS
+    BEGIN
+        MERGE INTO JRGY_CAT_ESTADO_HABITACION t
+        USING (SELECT p_codigo AS COD, p_nombre AS NOM FROM dual) s
+        ON (UPPER(t.ESTADO_HABITACION) = UPPER(s.NOM))
+        WHEN NOT MATCHED THEN
+            INSERT (COD_ESTADO_HABITACION, ESTADO_HABITACION) VALUES (s.COD, s.NOM);
+    END;
+
+    PROCEDURE ensure_cat_tipo_hab(p_codigo NUMBER, p_nombre VARCHAR2) IS
+    BEGIN
+        MERGE INTO JRGY_CAT_TIPO_HABITACION t
+        USING (SELECT p_codigo AS COD, p_nombre AS NOM FROM dual) s
+        ON (UPPER(t.TIPO_HABITACION) = UPPER(s.NOM))
+        WHEN NOT MATCHED THEN
+            INSERT (COD_TIPO_HABITACION, TIPO_HABITACION) VALUES (s.COD, s.NOM);
+    END;
+
+    PROCEDURE ensure_cat_modo_pago(p_codigo NUMBER, p_nombre VARCHAR2) IS
+    BEGIN
+        MERGE INTO JRGY_CAT_MODO_PAGO t
+        USING (SELECT p_codigo AS COD, p_nombre AS NOM FROM dual) s
+        ON (UPPER(t.MODO_PAGO) = UPPER(s.NOM))
+        WHEN NOT MATCHED THEN
+            INSERT (COD_MODO_PAGO, MODO_PAGO) VALUES (s.COD, s.NOM);
+    END;
+
+    PROCEDURE ensure_rol(p_codigo NUMBER, p_nombre VARCHAR2) IS
+    BEGIN
+        MERGE INTO JRGY_ROL t
+        USING (SELECT p_codigo AS COD, p_nombre AS NOM FROM dual) s
+        ON (UPPER(t.NOMBRE_ROL) = UPPER(s.NOM))
+        WHEN NOT MATCHED THEN
+            INSERT (COD_ROL, NOMBRE_ROL) VALUES (s.COD, s.NOM);
+    END;
+    PROCEDURE ensure_cat_estado_reserva(p_codigo NUMBER, p_nombre VARCHAR2) IS
+    BEGIN
+        MERGE INTO JRGY_CAT_ESTADO_RESERVA t
+        USING (SELECT p_codigo AS COD, p_nombre AS NOM FROM dual) s
+        ON (UPPER(t.ESTADO_RESERVA) = UPPER(s.NOM))
+        WHEN NOT MATCHED THEN
+            INSERT (COD_ESTADO_RESERVA, ESTADO_RESERVA) VALUES (s.COD, s.NOM);
+    END;
+BEGIN
+    ensure_cat_estado_usuario(1, 'ACTIVO');
+    ensure_cat_estado_usuario(2, 'INACTIVO');
+
+    ensure_cat_estado_laboral(1, 'ACTIVO');
+    ensure_cat_estado_laboral(2, 'SUSPENDIDO');
+
+    ensure_cat_estado_hab(1, 'LIBRE');
+    ensure_cat_estado_hab(2, 'OCUPADA');
+    ensure_cat_estado_hab(3, 'MANTENCION');
+
+    ensure_cat_tipo_hab(1, 'SIMPLE');
+    ensure_cat_tipo_hab(2, 'DOBLE');
+    ensure_cat_tipo_hab(3, 'MATRIMONIAL');
+    ensure_cat_tipo_hab(4, 'PREMIUM');
+    ensure_cat_tipo_hab(5, 'CONFORT');
+    ensure_cat_tipo_hab(6, 'MATRIMONIAL_FAMILIAR');
+    ensure_cat_tipo_hab(7, 'SUITE');
+
+    ensure_cat_modo_pago(1, 'EFECTIVO');
+    ensure_cat_modo_pago(2, 'TARJETA');
+    ensure_cat_modo_pago(3, 'TRANSFERENCIA');
+
+    ensure_rol(1, 'ADMIN');
+    ensure_rol(2, 'EMPLOYEE');
+    ensure_rol(3, 'USER');
+
+    ensure_cat_estado_reserva(1, 'CREADA');
+    ensure_cat_estado_reserva(2, 'CONFIRMADA');
+    ensure_cat_estado_reserva(3, 'EN_PROCESO');
+    ensure_cat_estado_reserva(4, 'FINALIZADA');
+    ensure_cat_estado_reserva(5, 'CANCELADA');
+END;
+/
+
+-- Ajusta la secuencia de roles para que no choque con los IDs sembrados
+DECLARE
+    v_curr NUMBER;
+    v_next NUMBER;
+BEGIN
+    SELECT NVL(MAX(COD_ROL), 0) + 1 INTO v_next FROM JRGY_ROL;
+    SELECT last_number INTO v_curr FROM user_sequences WHERE sequence_name = 'SQ_PK_ROL';
+
+    IF v_curr < v_next THEN
+        EXECUTE IMMEDIATE 'ALTER SEQUENCE SQ_PK_ROL INCREMENT BY ' || (v_next - v_curr);
+        SELECT SQ_PK_ROL.NEXTVAL INTO v_curr FROM dual;
+        EXECUTE IMMEDIATE 'ALTER SEQUENCE SQ_PK_ROL INCREMENT BY 1';
+    END IF;
+END;
 /
 
 PROMPT Creacion de tipos...
@@ -1789,12 +2037,163 @@ BEGIN
 END;
 /
 
-PROMPT Datos iniciales (usuario admin semilla)...
+CREATE OR REPLACE TRIGGER TRG_RESERVA_NO_OVERLAP
+    BEFORE INSERT OR UPDATE ON JRGY_RESERVA
+    FOR EACH ROW
+DECLARE
+    v_current_id NUMBER := NVL(:NEW.COD_RESERVA, :OLD.COD_RESERVA);
+    v_dummy NUMBER;
+BEGIN
+    -- Validacion de fechas
+    IF :NEW.FECHA_FIN < :NEW.FECHA_INICIO THEN
+        RAISE_APPLICATION_ERROR(-20060, 'La fecha fin debe ser mayor o igual a la de inicio');
+    END IF;
+
+    -- Evita solapes de reservas en la misma habitacion
+    BEGIN
+        SELECT 1
+        INTO v_dummy
+        FROM JRGY_RESERVA
+        WHERE COD_HABITACION = :NEW.COD_HABITACION
+          AND (:NEW.FECHA_INICIO <= FECHA_FIN AND :NEW.FECHA_FIN >= FECHA_INICIO)
+          AND (v_current_id IS NULL OR COD_RESERVA <> v_current_id)
+        FOR UPDATE NOWAIT;
+
+        RAISE_APPLICATION_ERROR(-20061, 'La habitacion ya esta reservada en ese rango de fechas');
+    EXCEPTION
+        WHEN NO_DATA_FOUND THEN
+            NULL;
+        WHEN OTHERS THEN
+            IF SQLCODE = -54 THEN
+                RAISE_APPLICATION_ERROR(-20062, 'Reserva en curso para esta habitacion, intenta de nuevo');
+            ELSE
+                RAISE;
+            END IF;
+    END;
+END;
+/
+
+PROMPT Sincronizacion de secuencias base (usuario, empleado, cliente)...
+DECLARE
+    PROCEDURE sync_seq(p_seq_name VARCHAR2, p_table VARCHAR2, p_column VARCHAR2) IS
+        v_curr NUMBER;
+        v_next NUMBER;
+    BEGIN
+        EXECUTE IMMEDIATE 'SELECT NVL(MAX(' || p_column || '), 0) + 1 FROM ' || p_table INTO v_next;
+
+        BEGIN
+            SELECT last_number INTO v_curr FROM user_sequences WHERE sequence_name = UPPER(p_seq_name);
+        EXCEPTION
+            WHEN NO_DATA_FOUND THEN
+                RETURN; -- La secuencia no existe, se omite el ajuste
+        END;
+
+        IF v_curr < v_next THEN
+            EXECUTE IMMEDIATE 'ALTER SEQUENCE ' || p_seq_name || ' INCREMENT BY ' || (v_next - v_curr);
+            EXECUTE IMMEDIATE 'SELECT ' || p_seq_name || '.NEXTVAL FROM dual' INTO v_curr;
+            EXECUTE IMMEDIATE 'ALTER SEQUENCE ' || p_seq_name || ' INCREMENT BY 1';
+        END IF;
+    END;
+BEGIN
+    sync_seq('SQ_PK_USUARIO', 'JRGY_USUARIO', 'COD_USUARIO');
+    sync_seq('SQ_PK_EMPLEADO', 'JRGY_EMPLEADO', 'COD_EMPLEADO');
+    sync_seq('SQ_PK_CLIENTE', 'JRGY_CLIENTE', 'COD_CLIENTE');
+END;
+/
+
+PROMPT Datos iniciales (usuarios semilla)...
 DECLARE
     v_admin_role_id NUMBER;
+    v_employee_role_id NUMBER;
+    v_user_role_id NUMBER;
     v_user_id NUMBER;
     v_estado_activo NUMBER;
+    v_estado_laboral_activo NUMBER;
     v_dummy NUMBER;
+
+    FUNCTION ensure_user(
+        p_nombre VARCHAR2,
+        p_apellido1 VARCHAR2,
+        p_apellido2 VARCHAR2,
+        p_email VARCHAR2,
+        p_telefono NUMBER,
+        p_hash VARCHAR2,
+        p_cod_estado NUMBER
+    ) RETURN NUMBER IS
+        v_id NUMBER;
+    BEGIN
+        BEGIN
+            SELECT COD_USUARIO INTO v_id FROM JRGY_USUARIO WHERE LOWER(EMAIL_USUARIO) = LOWER(p_email);
+        EXCEPTION
+            WHEN NO_DATA_FOUND THEN
+                INSERT INTO JRGY_USUARIO (
+                    NOMBRE_USUARIO,
+                    APELLIDO1_USUARIO,
+                    APELLIDO2_USUARIO,
+                    EMAIL_USUARIO,
+                    TELEFONO_USUARIO,
+                    CONTRASENA_HASH,
+                    COD_ESTADO_USUARIO
+                ) VALUES (
+                    p_nombre,
+                    p_apellido1,
+                    p_apellido2,
+                    p_email,
+                    p_telefono,
+                    p_hash,
+                    p_cod_estado
+                ) RETURNING COD_USUARIO INTO v_id;
+        END;
+        RETURN v_id;
+    END;
+
+    PROCEDURE ensure_user_role(p_usuario_id NUMBER, p_role_id NUMBER) IS
+    BEGIN
+        BEGIN
+            SELECT 1 INTO v_dummy FROM JRGY_USUARIO_ROL WHERE COD_USUARIO = p_usuario_id AND COD_ROL = p_role_id;
+        EXCEPTION
+            WHEN NO_DATA_FOUND THEN
+                INSERT INTO JRGY_USUARIO_ROL (COD_USUARIO, COD_ROL) VALUES (p_usuario_id, p_role_id);
+        END;
+    END;
+
+    PROCEDURE ensure_empleado(p_usuario_id NUMBER) IS
+        v_exists NUMBER;
+    BEGIN
+        BEGIN
+            SELECT COD_EMPLEADO INTO v_exists FROM JRGY_EMPLEADO WHERE COD_USUARIO = p_usuario_id;
+        EXCEPTION
+            WHEN NO_DATA_FOUND THEN
+                INSERT INTO JRGY_EMPLEADO (
+                    COD_USUARIO,
+                    COD_DEPARTAMENTO,
+                    CARGO,
+                    FECHA_CONTRATACION,
+                    SALARIO,
+                    COMISION,
+                    COD_ESTADO_LABORAL
+                ) VALUES (
+                    p_usuario_id,
+                    NULL,
+                    'Recepcionista',
+                    SYSDATE,
+                    850000,
+                    0,
+                    v_estado_laboral_activo
+                );
+        END;
+    END;
+
+    PROCEDURE ensure_cliente(p_usuario_id NUMBER) IS
+        v_exists NUMBER;
+    BEGIN
+        BEGIN
+            SELECT COD_CLIENTE INTO v_exists FROM JRGY_CLIENTE WHERE COD_USUARIO = p_usuario_id;
+        EXCEPTION
+            WHEN NO_DATA_FOUND THEN
+                INSERT INTO JRGY_CLIENTE (COD_USUARIO, FECHA_ALTA) VALUES (p_usuario_id, SYSDATE);
+        END;
+    END;
 BEGIN
     -- Asegura estado ACTIVO en catálogo de estado de usuario.
     BEGIN
@@ -1808,39 +2207,114 @@ BEGIN
             VALUES (v_estado_activo, 'ACTIVO');
     END;
 
-    -- Obtiene el rol ADMIN (asumiendo que existe en JRGY_ROL).
+    -- Asegura estado laboral ACTIVO.
+    BEGIN
+        SELECT COD_ESTADO_LABORAL INTO v_estado_laboral_activo
+        FROM JRGY_CAT_ESTADO_LABORAL
+        WHERE UPPER(ESTADO_LABORAL) = 'ACTIVO';
+    EXCEPTION
+        WHEN NO_DATA_FOUND THEN
+            v_estado_laboral_activo := 1;
+            INSERT INTO JRGY_CAT_ESTADO_LABORAL (COD_ESTADO_LABORAL, ESTADO_LABORAL)
+            VALUES (v_estado_laboral_activo, 'ACTIVO');
+    END;
+
+    -- Obtiene IDs de roles.
     SELECT COD_ROL INTO v_admin_role_id FROM JRGY_ROL WHERE UPPER(NOMBRE_ROL) = 'ADMIN';
+    SELECT COD_ROL INTO v_employee_role_id FROM JRGY_ROL WHERE UPPER(NOMBRE_ROL) = 'EMPLOYEE';
+    SELECT COD_ROL INTO v_user_role_id FROM JRGY_ROL WHERE UPPER(NOMBRE_ROL) = 'USER';
 
-    -- Busca usuario por email; si no existe, lo crea.
-    BEGIN
-        SELECT COD_USUARIO INTO v_user_id FROM JRGY_USUARIO WHERE LOWER(EMAIL_USUARIO) = LOWER('gustavo.admin@example.com');
-    EXCEPTION
-        WHEN NO_DATA_FOUND THEN
-            INSERT INTO JRGY_USUARIO (
-                NOMBRE_USUARIO,
-                APELLIDO1_USUARIO,
-                APELLIDO2_USUARIO,
-                EMAIL_USUARIO,
-                TELEFONO_USUARIO,
-                CONTRASENA_HASH,
-                COD_ESTADO_USUARIO
-            ) VALUES (
-                'Gustavo_admin_page',
-                'Gallegos',
-                'Harnisch',
-                'gustavo.admin@example.com',
-                123456789,
-                '$2y$10$LpD0f3wJ8i0R5I72dq4KC.UEMlOqhgCXNEuWP9pFYVod4SElutUKC',
-                v_estado_activo
-            ) RETURNING COD_USUARIO INTO v_user_id;
-    END;
+    -- Admin semilla.
+    v_user_id := ensure_user(
+        'Gustavo_admin_page',
+        'Gallegos',
+        'Harnisch',
+        'gustavo.admin@example.com',
+        123456789,
+        '$2y$10$LpD0f3wJ8i0R5I72dq4KC.UEMlOqhgCXNEuWP9pFYVod4SElutUKC',
+        v_estado_activo
+    );
+    ensure_user_role(v_user_id, v_admin_role_id);
 
-    -- Asigna rol ADMIN si aún no lo tiene.
+    -- Empleado semilla.
+    v_user_id := ensure_user(
+        'Gustavo',
+        'Empleado',
+        'Demo',
+        'gustavo.empleado@example.com',
+        222333444,
+        '$2b$10$TZqYb93d3DilnJNOcPyAremBnzyaTNy4MyYQeUp.koMaSBQv6p9qm',
+        v_estado_activo
+    );
+    ensure_user_role(v_user_id, v_employee_role_id);
+    ensure_empleado(v_user_id);
+
+    -- Cliente semilla.
+    v_user_id := ensure_user(
+        'Gustavo',
+        'Cliente',
+        'Demo',
+        'gustavo.cliente@example.com',
+        333444555,
+        '$2b$10$KyrGt1QEWo0MgY8IR3x0cObXdSevb01PAEF4EczGl2ig/O1va6HHS',
+        v_estado_activo
+    );
+    ensure_user_role(v_user_id, v_user_role_id);
+    ensure_cliente(v_user_id);
+END;
+/
+
+PROMPT Datos iniciales (habitaciones demo reales)...
+DECLARE
+    v_estado_libre NUMBER;
+    v_tipo_simple NUMBER;
+    v_tipo_matrimonial NUMBER;
+    v_tipo_confort NUMBER;
+    v_tipo_mat_fam NUMBER;
+    v_tipo_suite NUMBER;
+
+    PROCEDURE ensure_room(p_nro NUMBER, p_capacidad NUMBER, p_tipo NUMBER, p_precio NUMBER) IS
+        v_id NUMBER;
     BEGIN
-        SELECT 1 INTO v_dummy FROM JRGY_USUARIO_ROL WHERE COD_USUARIO = v_user_id AND COD_ROL = v_admin_role_id;
-    EXCEPTION
-        WHEN NO_DATA_FOUND THEN
-            INSERT INTO JRGY_USUARIO_ROL (COD_USUARIO, COD_ROL) VALUES (v_user_id, v_admin_role_id);
+        BEGIN
+            SELECT COD_HABITACION INTO v_id FROM JRGY_HABITACION WHERE NRO_HABITACION = p_nro;
+        EXCEPTION
+            WHEN NO_DATA_FOUND THEN
+                INSERT INTO JRGY_HABITACION (NRO_HABITACION, CAPACIDAD, COD_TIPO_HABITACION, COD_ESTADO_HABITACION, PRECIO_BASE)
+                VALUES (p_nro, p_capacidad, p_tipo, v_estado_libre, p_precio);
+        END;
     END;
+BEGIN
+    SELECT COD_ESTADO_HABITACION INTO v_estado_libre FROM JRGY_CAT_ESTADO_HABITACION WHERE UPPER(ESTADO_HABITACION) = 'LIBRE';
+    SELECT COD_TIPO_HABITACION INTO v_tipo_simple FROM JRGY_CAT_TIPO_HABITACION WHERE UPPER(TIPO_HABITACION) = 'SIMPLE';
+    SELECT COD_TIPO_HABITACION INTO v_tipo_matrimonial FROM JRGY_CAT_TIPO_HABITACION WHERE UPPER(TIPO_HABITACION) = 'MATRIMONIAL';
+    SELECT COD_TIPO_HABITACION INTO v_tipo_confort FROM JRGY_CAT_TIPO_HABITACION WHERE UPPER(TIPO_HABITACION) = 'CONFORT';
+    SELECT COD_TIPO_HABITACION INTO v_tipo_mat_fam FROM JRGY_CAT_TIPO_HABITACION WHERE UPPER(TIPO_HABITACION) = 'MATRIMONIAL_FAMILIAR';
+    SELECT COD_TIPO_HABITACION INTO v_tipo_suite FROM JRGY_CAT_TIPO_HABITACION WHERE UPPER(TIPO_HABITACION) = 'SUITE';
+
+    -- Simple
+    ensure_room(101, 1, v_tipo_simple, 45000);
+    ensure_room(102, 1, v_tipo_simple, 45000);
+    ensure_room(103, 1, v_tipo_simple, 45000);
+
+    -- Matrimonial (capacidad 2)
+    ensure_room(201, 2, v_tipo_matrimonial, 60000);
+    ensure_room(202, 2, v_tipo_matrimonial, 60000);
+    ensure_room(203, 2, v_tipo_matrimonial, 60000);
+
+    -- Confort (2 camas, capacidad 2)
+    ensure_room(301, 2, v_tipo_confort, 70000);
+    ensure_room(302, 2, v_tipo_confort, 70000);
+    ensure_room(303, 2, v_tipo_confort, 70000);
+
+    -- Matrimonial familiar (1 matrimonial + 2 simples, capacidad 4)
+    ensure_room(401, 4, v_tipo_mat_fam, 90000);
+    ensure_room(402, 4, v_tipo_mat_fam, 90000);
+    ensure_room(403, 4, v_tipo_mat_fam, 90000);
+
+    -- Suite (3 camas individuales, capacidad 3)
+    ensure_room(501, 3, v_tipo_suite, 85000);
+    ensure_room(502, 3, v_tipo_suite, 85000);
+    ensure_room(503, 3, v_tipo_suite, 85000);
 END;
 /
