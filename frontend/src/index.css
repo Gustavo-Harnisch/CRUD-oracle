@@ -44,17 +44,17 @@ a {
 
 .navbar-nav .nav-link:hover,
 .navbar-nav .nav-link:focus-visible {
-  background-color: rgba(13, 110, 253, 0.08);
-  color: #0d6efd;
-  box-shadow: 0 0.5rem 1rem rgba(13, 110, 253, 0.12);
+  background: linear-gradient(135deg, #eef3ff, #e4edff);
+  color: #1f3b6b;
+  box-shadow: 0 0.6rem 1.2rem rgba(15, 50, 100, 0.12);
   transform: translateY(-2px);
 }
 
 .navbar-nav .nav-link.active,
 .navbar-nav .nav-link:active {
-  background-color: rgba(13, 110, 253, 0.16);
-  color: #0d6efd;
-  box-shadow: 0 0.5rem 1rem rgba(13, 110, 253, 0.2);
+  background: linear-gradient(135deg, #d7e5ff, #cddfff);
+  color: #12305f;
+  box-shadow: 0 0.65rem 1.35rem rgba(15, 50, 100, 0.18);
   transform: translateY(-1px);
 }
 
@@ -71,42 +71,4 @@ a {
 .card-image-show:active {
   transform: translateY(-1px);
   box-shadow: 0 0.5rem 1.25rem rgba(0, 0, 0, 0.2);
-}
-
-/* Botón CTA reutilizable para tarjetas */
-.btn-cta {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  border-radius: 999px;
-  padding: 0.55rem 1rem;
-  font-weight: 600;
-  color: #0b3d91;
-  background: linear-gradient(135deg, #f0f6ff, #d9e8ff);
-  border: 1px solid #b8d0ff;
-  box-shadow: 0 0.75rem 1.6rem rgba(13, 110, 253, 0.12);
-  transition: transform 0.15s ease, box-shadow 0.2s ease, background 0.2s ease;
-}
-
-.btn-cta::after {
-  content: "→";
-  font-size: 0.9rem;
-  transition: transform 0.15s ease;
-}
-
-.btn-cta:hover,
-.btn-cta:focus-visible {
-  background: linear-gradient(135deg, #e7f0ff, #c7ddff);
-  transform: translateY(-2px);
-  box-shadow: 0 1rem 1.8rem rgba(13, 110, 253, 0.16);
-}
-
-.btn-cta:hover::after,
-.btn-cta:focus-visible::after {
-  transform: translateX(3px);
-}
-
-.btn-cta:active {
-  transform: translateY(-1px);
-  box-shadow: 0 0.7rem 1.3rem rgba(13, 110, 253, 0.14);
 }

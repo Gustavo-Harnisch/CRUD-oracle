@@ -14,7 +14,7 @@ const CardImageShow = ({ image, alt, title, text, linkHref, linkLabel }) => {
         <h5 className="card-title">{title}</h5>
         <p className="card-text flex-grow-1">{text}</p>
         {linkHref && (
-          <a className="btn btn-cta align-self-start" href={linkHref}>
+          <a className="btn btn-outline-primary btn-sm align-self-start" href={linkHref}>
             {linkLabel || "Ver más"}
           </a>
         )}

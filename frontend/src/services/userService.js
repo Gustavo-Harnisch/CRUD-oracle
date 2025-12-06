@@ -1,6 +1,6 @@
 import api from "./api";
 
-const resource = "/users";
+const resource = "/usuarios";
 
 export const getUsers = () => api.get(resource);
 

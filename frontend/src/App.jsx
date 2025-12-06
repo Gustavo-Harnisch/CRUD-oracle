@@ -14,14 +14,17 @@ import ContactPage from "./pages/ContactPage";
 import ResidencialDelMaulePage from "./pages/ResidencialDelMaulePage";
 
 import LoginPage from "./pages/LoginPage";
-import AdminDashboard from "./pages/admin/AdminDashboard";
+import AdminDashboard from "./pages/AdminDashboard";
 import Usuarios from "./pages/Usuarios";
 import CrearUsuario from "./pages/CrearUsuario";
 import EditarUsuario from "./pages/EditarUsuario";
 import NotFoundPage from "./pages/NotFoundPage";
 import ProtectedRoute from "./components/ProtectedRoute";
-import CustomerDashboard from "./pages/customer/CustomerDashboard";
-import EmployeeDashboard from "./pages/employee/EmployeeDashboard";
+import AdminEmpleadosPage from "./pages/AdminEmpleadosPage";
+import AdminProductosPage from "./pages/AdminProductosPage";
+import AdminPedidosPage from "./pages/AdminPedidosPage";
+import AdminUbicacionesPage from "./pages/AdminUbicacionesPage";
+import AdminRolesPage from "./pages/AdminRolesPage";
 
 function App() {
   return (
@@ -45,28 +48,6 @@ function App() {
           <Route path="/login" element={<LoginPage />} />
         </Route>
 
-        {/* Rutas cliente (requiere login, rol USER/EMPLOYEE/ADMIN) */}
-        <Route
-          element={
-            <ProtectedRoute roles={["USER", "EMPLOYEE", "ADMIN"]}>
-              <MainLayout />
-            </ProtectedRoute>
-          }
-        >
-          <Route path="/customer" element={<CustomerDashboard />} />
-        </Route>
-
-        {/* Rutas de empleado */}
-        <Route
-          element={
-            <ProtectedRoute roles={["EMPLOYEE", "ADMIN"]}>
-              <MainLayout />
-            </ProtectedRoute>
-          }
-        >
-          <Route path="/employee" element={<EmployeeDashboard />} />
-        </Route>
-
         {/* Rutas de administración */}
         <Route
           element={
@@ -76,6 +57,11 @@ function App() {
           }
         >
           <Route path="/admin" element={<AdminDashboard />} />
+          <Route path="/admin/empleados" element={<AdminEmpleadosPage />} />
+          <Route path="/admin/productos" element={<AdminProductosPage />} />
+          <Route path="/admin/pedidos" element={<AdminPedidosPage />} />
+          <Route path="/admin/ubicaciones" element={<AdminUbicacionesPage />} />
+          <Route path="/admin/roles" element={<AdminRolesPage />} />
           <Route path="/admin/users" element={<Usuarios />} />
           <Route path="/admin/users/create" element={<CrearUsuario />} />
           <Route path="/admin/users/:id/edit" element={<EditarUsuario />} />

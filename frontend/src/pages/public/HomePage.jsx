@@ -1,6 +1,7 @@
-// src/pages/HomePage.jsx
+import { useNavigate } from "react-router-dom";
 import HeroSection from "../../components/HeroSection.jsx";
 import CardImageShow from "../../components/CardImageShow.jsx";
+import { useAuth } from "../../context/AuthContext";
 
 const homePhoto = "/home_foto.jpg";
 const roomImg = "/room.png";
@@ -8,6 +9,17 @@ const serviceImg = "/service.png";
 const contactImg = "/contact.png";
 
 const HomePage = () => {
+  const { isAuthenticated } = useAuth();
+  const navigate = useNavigate();
+
+  const handleReserve = () => {
+    if (isAuthenticated) {
+      navigate("/rooms");
+    } else {
+      navigate("/login", { state: { from: { pathname: "/rooms" }, mode: "register" } });
+    }
+  };
+
   return (
     <>
       <HeroSection
@@ -15,7 +27,7 @@ const HomePage = () => {
         title="Residencial Maule"
         subtitle="Un Tesoro Cultural en el Corazón de Chile"
         primaryLabel="Reservar ahora"
-        primaryHref="/rooms"
+        primaryOnClick={handleReserve}
         secondaryLabel="Ver habitaciones"
         secondaryHref="/rooms"
         overlayOpacity={0.5}

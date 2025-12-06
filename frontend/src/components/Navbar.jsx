@@ -1,83 +1,36 @@
 // src/components/Navbar.jsx
-import { NavLink, useNavigate, useLocation } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
-const NAV_VARIANTS = {
-  UNLOGGED: [
-    { to: "/", label: "Inicio", end: true },
-    { to: "/rooms", label: "Habitaciones" },
-    { to: "/services", label: "Servicios" },
-    { to: "/residencial-del-maule", label: "Residencial" },
-    { to: "/contact", label: "Contacto" },
-  ],
-  CUSTOMER: [
-    { to: "/customer", label: "Mis reservas", end: true },
-    { to: "/rooms", label: "Reservar" },
-    { to: "/services", label: "Ofertas y experiencias" },
-    { to: "/residencial-del-maule", label: "Noticias y panoramas" },
-    { to: "/customer#perfil", label: "Editar perfil" },
-    { to: "/contact", label: "Soporte" },
-  ],
-  EMPLOYEE: [
-    { to: "/employee", label: "Panel diario", end: true },
-    { to: "/rooms", label: "Habitaciones y tarifas" },
-    { to: "/employee#agenda", label: "Crear evento" },
-    { to: "/employee#clientes", label: "Clientes y check-in" },
-    { to: "/employee#peticiones", label: "Peticiones de huéspedes" },
-    { to: "/contact", label: "Comunicaciones" },
-  ],
-  ADMIN: [
-    { to: "/admin", label: "Dashboard", end: true },
-    { to: "/admin#inventario", label: "Cuartos e inventario" },
-    { to: "/admin/users", label: "Usuarios" },
-    { to: "/admin/users#empleados", label: "Empleados" },
-    { to: "/admin#tarifas", label: "Tarifas y promos" },
-    { to: "/admin#auditoria", label: "Auditoría y logs" },
-  ],
-};
+const navLinks = [
+  { to: "/", label: "Inicio", end: true },
+  { to: "/rooms", label: "Habitaciones" },
+  { to: "/services", label: "Servicios" },
+  { to: "/residencial-del-maule", label: "Residencial" },
+  { to: "/contact", label: "Contacto" },
+];
 
-const resolveNavVariant = (roles = [], isAuthenticated) => {
-  if (!isAuthenticated) return "UNLOGGED";
-  if (roles.includes("ADMIN")) return "ADMIN";
-  if (roles.includes("EMPLOYEE")) return "EMPLOYEE";
-  if (roles.includes("USER")) return "CUSTOMER";
-  return "UNLOGGED";
-};
+const adminLinks = [
+  { to: "/admin", label: "Movimientos" },
+  { to: "/admin/empleados", label: "Empleados" },
+  { to: "/admin/productos", label: "Productos" },
+  { to: "/admin/pedidos", label: "Pedidos" },
+  { to: "/admin/ubicaciones", label: "Ubicaciones" },
+  { to: "/admin/roles", label: "Roles" },
+  { to: "/admin/users", label: "Usuarios" },
+];
 
 const Navbar = () => {
   const { isAuthenticated, user, logout } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
 
   const handleLogout = () => {
     logout();
     navigate("/");
   };
 
-  const isItemActive = (to, end = false) => {
-    const parsed = new URL(to, "http://dummy");
-    const targetPath = parsed.pathname;
-    const targetHash = parsed.hash;
-
-    if (end) {
-      if (location.pathname !== targetPath) return false;
-      return targetHash ? location.hash === targetHash : true;
-    }
-
-    if (!location.pathname.startsWith(targetPath)) return false;
-    return targetHash ? location.hash === targetHash : true;
-  };
-
-  const linkClass = (to, end) =>
-    `nav-link${isItemActive(to, end) ? " active fw-semibold" : ""}`;
-
-  const roles = Array.isArray(user?.roles)
-    ? user.roles.map((r) => String(r).toUpperCase())
-    : user?.role
-      ? [String(user.role).toUpperCase()]
-      : [];
-  const navVariant = resolveNavVariant(roles, isAuthenticated);
-  const navItems = NAV_VARIANTS[navVariant] || NAV_VARIANTS.UNLOGGED;
+  const linkClass = ({ isActive }) =>
+    `nav-link${isActive ? " active fw-semibold text-dark" : ""}`;
 
   return (
     <nav className="navbar navbar-expand-md navbar-light bg-white shadow-sm fixed-top">
@@ -100,9 +53,9 @@ const Navbar = () => {
 
         <div className="collapse navbar-collapse" id="mainNavbar">
           <ul className="navbar-nav ms-auto align-items-md-center gap-md-3">
-            {navItems.map(({ to, label, end }) => (
+            {navLinks.map(({ to, label, end }) => (
               <li className="nav-item" key={to}>
-                <NavLink to={to} end={end} className={() => linkClass(to, end)}>
+                <NavLink to={to} end={end} className={linkClass}>
                   {label}
                 </NavLink>
               </li>
@@ -110,6 +63,27 @@ const Navbar = () => {
 
             {isAuthenticated ? (
               <>
+                {(user?.role === "admin" || user?.COD_ROL === 1 || user?.rol === 1) && (
+                  <li className="nav-item dropdown">
+                    <button
+                      className="nav-link dropdown-toggle btn btn-link text-decoration-none"
+                      id="adminMenu"
+                      data-bs-toggle="dropdown"
+                      aria-expanded="false"
+                    >
+                      Panel
+                    </button>
+                    <ul className="dropdown-menu dropdown-menu-end" aria-labelledby="adminMenu">
+                      {adminLinks.map((link) => (
+                        <li key={link.to}>
+                          <NavLink className="dropdown-item" to={link.to} end={link.to === "/admin"}>
+                            {link.label}
+                          </NavLink>
+                        </li>
+                      ))}
+                    </ul>
+                  </li>
+                )}
                 <li className="nav-item">
                   <button
                     type="button"
@@ -125,7 +99,7 @@ const Navbar = () => {
                 <NavLink
                   to="/login"
                   className={({ isActive }) =>
-                    `nav-link fw-semibold${isActive ? " active" : ""}`
+                    `nav-link fw-semibold${isActive ? " text-dark" : ""}`
                   }
                 >
                   Iniciar sesión

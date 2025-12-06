@@ -1,18 +1,10 @@
 // src/pages/ServicesPage.jsx
-import CardGrid from "../components/CardGrid";
-
-const services = [
-  { id: 1, name: "Desayuno incluido", description: "Servicio de desayuno continental." },
-  { id: 2, name: "WiFi", description: "Conexión WiFi en todas las áreas comunes." },
-  { id: 3, name: "Estacionamiento", description: "Estacionamiento privado para huéspedes." },
-];
-
 const ServicesPage = () => {
-  const serviceCards = services.map((service) => ({
-    id: service.id,
-    title: service.name,
-    text: service.description,
-  }));
+  const services = [
+    { id: 1, name: "Desayuno incluido", description: "Servicio de desayuno continental." },
+    { id: 2, name: "WiFi", description: "Conexión WiFi en todas las áreas comunes." },
+    { id: 3, name: "Estacionamiento", description: "Estacionamiento privado para huéspedes." },
+  ];
 
   return (
     <div className="container py-4">
@@ -21,7 +13,18 @@ const ServicesPage = () => {
         Detalle de los servicios disponibles en la Residencial del Maule.
       </p>
 
-      <CardGrid items={serviceCards} />
+      <div className="row g-3">
+        {services.map((service) => (
+          <div className="col-md-4" key={service.id}>
+            <div className="card h-100">
+              <div className="card-body">
+                <h5 className="card-title">{service.name}</h5>
+                <p className="card-text">{service.description}</p>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 };

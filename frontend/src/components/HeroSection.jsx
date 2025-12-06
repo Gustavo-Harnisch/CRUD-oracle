@@ -5,6 +5,7 @@ const HeroSection = ({
   subtitle,
   primaryLabel,
   primaryHref,
+  primaryOnClick,
   secondaryLabel,
   secondaryHref,
   minHeight = "calc(100vh - 5.5rem)",
@@ -33,11 +34,15 @@ const HeroSection = ({
           <h1 className="display-4 fw-bold mb-3">{title}</h1>
           {subtitle && <p className="lead mb-4">{subtitle}</p>}
           <div className="d-flex flex-column flex-sm-row gap-2 justify-content-center">
-            {primaryHref && (
-              <a href={primaryHref} className="btn btn-light fw-semibold">
+            {primaryHref || primaryOnClick ? (
+              <button
+                type="button"
+                className="btn btn-light fw-semibold"
+                onClick={primaryOnClick}
+              >
                 {primaryLabel}
-              </a>
-            )}
+              </button>
+            ) : null}
             {secondaryHref && (
               <a href={secondaryHref} className="btn btn-outline-light">
                 {secondaryLabel}

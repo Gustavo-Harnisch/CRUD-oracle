@@ -1,17 +1,13 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import UserForm from "../components/UserForm";
 import { getUserById, updateUser } from "../services/userService";
 
 const EditarUsuario = () => {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  const [initialValues, setInitialValues] = useState({
+  const [formData, setFormData] = useState({
     name: "",
-    apellido1: "",
-    apellido2: "",
-    telefono: "",
     email: "",
     role: "",
     password: "",
@@ -25,13 +21,10 @@ const EditarUsuario = () => {
       setError(null);
       try {
         const { data } = await getUserById(id);
-        setInitialValues({
+        setFormData({
           name: data?.name || "",
-          apellido1: data?.apellido1 || "",
-          apellido2: data?.apellido2 || "",
-          telefono: data?.telefono || "",
           email: data?.email || "",
-          role: Array.isArray(data?.roles) && data.roles.length ? data.roles[0] : data?.role || "",
+          role: data?.role || "",
           password: "",
         });
       } catch (err) {
@@ -47,18 +40,18 @@ const EditarUsuario = () => {
     fetchUser();
   }, [id]);
 
-  const handleSubmit = async (formData) => {
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
     setIsSubmitting(true);
     setError(null);
 
     try {
-      const { password, ...rest } = formData;
-      const payloadBase = password ? formData : rest; // No enviar contraseña vacía
-      const payload = {
-        ...payloadBase,
-        roles: payloadBase.role ? [String(payloadBase.role).toUpperCase()] : ["USER"],
-      };
-      await updateUser(id, payload);
+      await updateUser(id, formData);
       navigate("/admin/users");
     } catch (err) {
       setError(
@@ -82,15 +75,86 @@ const EditarUsuario = () => {
     <div className="container py-4">
       <h1 className="h4 mb-3">Editar usuario</h1>
 
-      <UserForm
-        initialValues={initialValues}
-        onSubmit={handleSubmit}
-        isSubmitting={isSubmitting}
-        error={error}
-        submitLabel="Actualizar usuario"
-        onCancel={() => navigate("/admin/users")}
-        passwordOptional
-      />
+      <form onSubmit={handleSubmit} className="card card-body" style={{ maxWidth: "600px" }}>
+        <div className="mb-3">
+          <label className="form-label" htmlFor="name">
+            Nombre completo
+          </label>
+          <input
+            id="name"
+            name="name"
+            type="text"
+            className="form-control"
+            value={formData.name}
+            onChange={handleChange}
+            required
+          />
+        </div>
+
+        <div className="mb-3">
+          <label className="form-label" htmlFor="email">
+            Correo electrónico
+          </label>
+          <input
+            id="email"
+            name="email"
+            type="email"
+            className="form-control"
+            value={formData.email}
+            onChange={handleChange}
+            required
+          />
+        </div>
+
+        <div className="mb-3">
+          <label className="form-label" htmlFor="role">
+            Rol
+          </label>
+          <select
+            id="role"
+            name="role"
+            className="form-select"
+            value={formData.role}
+            onChange={handleChange}
+            required
+          >
+            <option value="">Selecciona un rol</option>
+            <option value="admin">Admin</option>
+            <option value="user">Usuario</option>
+          </select>
+        </div>
+
+        <div className="mb-3">
+          <label className="form-label" htmlFor="password">
+            Contraseña (opcional)
+          </label>
+          <input
+            id="password"
+            name="password"
+            type="password"
+            className="form-control"
+            value={formData.password}
+            onChange={handleChange}
+            placeholder="Deja en blanco para no cambiarla"
+          />
+        </div>
+
+        {error && <div className="alert alert-danger">{error}</div>}
+
+        <div className="d-flex gap-2">
+          <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
+            {isSubmitting ? "Guardando..." : "Actualizar usuario"}
+          </button>
+          <button
+            type="button"
+            className="btn btn-outline-secondary"
+            onClick={() => navigate("/admin/users")}
+            disabled={isSubmitting}
+          >
+            Cancelar
+          </button>
+        </div>
+      </form>
     </div>
   );
 };

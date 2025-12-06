@@ -18,16 +18,14 @@ const ProtectedRoute = ({ roles = [], children }) => {
   }
 
   if (roles.length > 0 && user) {
-    const userRoles = Array.isArray(user.roles)
-      ? user.roles.map((r) => String(r).toUpperCase())
-      : user.role
-        ? [String(user.role).toUpperCase()]
-        : [];
-    const required = roles.map((r) => String(r).toUpperCase());
-    const hasRequired = required.some((r) => userRoles.includes(r));
-    if (!hasRequired) {
-      return <Navigate to="/" replace />;
-    }
+    const role = user.role || user.ROL || user.COD_ROL || user.codRol;
+    const matches =
+      role === undefined
+        ? false
+        : roles.includes(role) ||
+          roles.includes(String(role)) ||
+          (String(role).toLowerCase() === "1" && roles.includes("admin"));
+    if (!matches) return <Navigate to="/" replace />;
   }
 
   return children;
