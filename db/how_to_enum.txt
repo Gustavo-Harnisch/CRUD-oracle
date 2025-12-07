@@ -1,0 +1,44 @@
+How to: catálogos tipo enum
+===========================
+Objetivo
+- Recordar qué catálogos funcionan como enum y cómo se siembran al correr `db/Base_de_datos.sql`.
+
+Catálogos actuales y seeds (BD)
+- JRGY_ROL: 1 ADMIN, 2 EMPLOYEE, 3 USER.
+- JRGY_CAT_ESTADO_USUARIO: 1 ACTIVO, 2 INACTIVO.
+- JRGY_CAT_ESTADO_LABORAL: 1 ACTIVO, 2 SUSPENDIDO, 3 INACTIVO, 4 DESPEDIDO, 5 RENUNCIADO.
+- JRGY_CAT_ESTADO_HABITACION: 1 LIBRE, 2 OCUPADA, 3 MANTENCION.
+- JRGY_CAT_TIPO_HABITACION: 1 SIMPLE, 2 DOBLE, 3 MATRIMONIAL, 4 PREMIUM, 5 CONFORT, 6 MATRIMONIAL_FAMILIAR, 7 SUITE.
+- JRGY_CAT_MODO_PAGO: 1 EFECTIVO, 2 TARJETA, 3 TRANSFERENCIA.
+- JRGY_CAT_ESTADO_RESERVA: 1 CREADA, 2 CONFIRMADA, 3 EN_PROCESO, 4 FINALIZADA, 5 CANCELADA, 6 CHECKOUT_SOLICITADO.
+
+Dónde se siembran
+- Bloque "Datos base para catalogos y roles..." en `db/Base_de_datos.sql`, usando procedimientos ensure_* (MERGE) para mantener idempotencia.
+- Si agregas un valor nuevo, añade otra llamada a ensure_* con un ID fijo y nombre en mayúsculas.
+
+Patrón para nuevos catálogos tipo enum
+1) Crear tabla `JRGY_CAT_*` con PK numérica, columna de nombre/código y (recomendado) un índice/unique por el nombre en UPPER().
+2) (Opcional) Agregar columna `ACTIVO CHAR(1)` para desactivar sin borrar.
+3) En la sección de seeds, declara un procedimiento `ensure_*` y llama a `ensure_*` por cada valor inicial.
+4) El backend debe buscar por texto (UPPER(nombre)) y no depender de IDs mágicos.
+
+Ejemplo rápido de semilla
+```
+    PROCEDURE ensure_cat_prioridad(p_codigo NUMBER, p_nombre VARCHAR2) IS
+    BEGIN
+        MERGE INTO JRGY_CAT_PRIORIDAD t
+        USING (SELECT p_codigo AS COD, p_nombre AS NOM FROM dual) s
+        ON (UPPER(t.NOMBRE) = UPPER(s.NOM))
+        WHEN NOT MATCHED THEN
+            INSERT (COD_PRIORIDAD, NOMBRE) VALUES (s.COD, s.NOM);
+    END;
+    ...
+    ensure_cat_prioridad(1, 'BAJA');
+    ensure_cat_prioridad(2, 'MEDIA');
+    ensure_cat_prioridad(3, 'ALTA');
+```
+
+Notas rápidas
+- No borres valores en producción; usa ACTIVO/INACTIVO si necesitas ocultarlos.
+- Si el catálogo ya tiene datos, mantén MERGE/WHERE NOT EXISTS para no romper re-ejecuciones del script.
+- Documenta el catálogo y sus valores en `db/memoria_ia.txt` cuando un procedimiento nuevo dependa de él.

@@ -5,6 +5,7 @@ import {
   updateService,
   deleteService,
   changeServiceStatus,
+  fetchServiceCategories,
 } from "../../services/serviceService";
 import { useAuth } from "../../context/AuthContext";
 
@@ -32,6 +33,9 @@ const AdminServices = () => {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
+  const [categories, setCategories] = useState([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
+  const [categoriesError, setCategoriesError] = useState("");
   const [filters, setFilters] = useState({
     search: "",
     tipo: "",
@@ -39,6 +43,19 @@ const AdminServices = () => {
     maxPrice: "",
     hour: "",
   });
+  const typeOptions = useMemo(() => {
+    const base = Array.isArray(categories) ? categories : [];
+    const seen = new Set(base.map((c) => c.trim()));
+    const list = [...base];
+    [form.tipo, filters.tipo].forEach((name) => {
+      const n = (name || "").trim();
+      if (n && !seen.has(n)) {
+        seen.add(n);
+        list.push(n);
+      }
+    });
+    return list;
+  }, [services, form.tipo, filters.tipo, categories]);
 
   const load = async () => {
     setLoading(true);
@@ -46,6 +63,7 @@ const AdminServices = () => {
     try {
       const data = await listServices({ includeInactive: true });
       setServices(data);
+      await loadCategories(data);
     } catch (err) {
       console.error(err);
       const status = err?.response?.status;
@@ -63,9 +81,48 @@ const AdminServices = () => {
     load();
   }, []);
 
+  const loadCategories = async (servicesData = services) => {
+    setCategoriesError("");
+    setCategoriesLoading(true);
+    try {
+      const cats = await fetchServiceCategories();
+      setCategories(Array.isArray(cats) ? cats : []);
+    } catch (err) {
+      console.error(err);
+      const derived = Array.isArray(servicesData)
+        ? Array.from(new Set(servicesData.map((s) => s.tipo || "")))
+        : [];
+      setCategories(derived.filter((c) => (c || "").trim() !== ""));
+      setCategoriesError("No se pudieron cargar las categorías; usando valores existentes.");
+    } finally {
+      setCategoriesLoading(false);
+    }
+  };
+
   const resetForm = () => {
     setForm(emptyForm);
     setEditingId(null);
+  };
+
+  const handleAddCategory = () => {
+    const name = window.prompt("Nombre de la categoría (se guarda en MAYÚSCULAS):");
+    if (name === null) return;
+    const trimmed = (name || "").trim().toUpperCase();
+    if (!trimmed) return;
+    setCategories((prev) => {
+      const next = Array.isArray(prev) ? [...prev] : [];
+      if (!next.includes(trimmed)) next.push(trimmed);
+      return next;
+    });
+    setForm((p) => ({ ...p, tipo: trimmed }));
+  };
+
+  const handleCategoryChange = (value) => {
+    if (value === "__add__") {
+      handleAddCategory();
+      return;
+    }
+    setForm((prev) => ({ ...prev, tipo: value }));
   };
 
   const parseTime = (val) => {
@@ -301,14 +358,51 @@ const AdminServices = () => {
                     onChange={(e) => setForm((prev) => ({ ...prev, descripcion: e.target.value }))}
                   />
                 </div>
-                <div className="col-md-6">
-                  <label className="form-label">Tipo</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    value={form.tipo}
-                    onChange={(e) => setForm((prev) => ({ ...prev, tipo: e.target.value }))}
-                  />
+                <div className="col-12">
+                  <label className="form-label">Categoría / tipo</label>
+                  <div className="d-flex gap-2 flex-wrap align-items-center">
+                    <select
+                      className="form-select flex-grow-1"
+                      style={{ minWidth: "220px" }}
+                      value={form.tipo}
+                      onChange={(e) => handleCategoryChange(e.target.value)}
+                      disabled={categoriesLoading}
+                    >
+                      <option value="">{categoriesLoading ? "Cargando..." : "Selecciona"}</option>
+                      {typeOptions.map((t) => (
+                        <option key={t} value={t}>
+                          {t}
+                        </option>
+                      ))}
+                      {form.tipo && !typeOptions.includes(form.tipo) && (
+                        <option value={form.tipo}>{form.tipo}</option>
+                      )}
+                      <option value="__add__">+ Agregar categoría...</option>
+                    </select>
+                    <button
+                      type="button"
+                      className="btn btn-outline-secondary flex-shrink-0"
+                      style={{ minWidth: "130px" }}
+                      onClick={handleAddCategory}
+                      disabled={categoriesLoading}
+                    >
+                      Agregar
+                    </button>
+                  </div>
+                  <div className="d-flex flex-wrap justify-content-between align-items-center mt-1">
+                    <div className="form-text mb-0">
+                      {categoriesLoading && <span className="text-muted">Cargando categorías...</span>}
+                      {categoriesError && <span className="text-danger">{categoriesError}</span>}
+                      {!categoriesLoading && !categoriesError && (
+                        <span className="text-muted">Usa la lista o agrega una nueva categoría (se guarda en MAYÚSCULAS).</span>
+                      )}
+                    </div>
+                    {!categoriesLoading && (
+                      <button type="button" className="btn btn-sm btn-link p-0 ms-auto" onClick={() => loadCategories()}>
+                        Recargar
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <div className="col-md-6">
                   <label className="form-label">Precio por pax</label>
@@ -459,13 +553,18 @@ const AdminServices = () => {
                 </div>
                 <div className="col-6 col-lg-2">
                   <label className="form-label small text-muted mb-1">Tipo</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    placeholder="Ej: spa"
+                  <select
+                    className="form-select"
                     value={filters.tipo}
                     onChange={(e) => setFilters((p) => ({ ...p, tipo: e.target.value }))}
-                  />
+                  >
+                    <option value="">Todos</option>
+                    {typeOptions.map((t) => (
+                      <option key={`filter-${t}`} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div className="col-6 col-lg-2">
                   <label className="form-label small text-muted mb-1">Precio mín</label>

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { createEmployee, deleteEmployee, listEmployees, updateEmployee } from "../../services/employeeService";
+import { listDepartments } from "../../services/departmentService";
 import { useAuth } from "../../context/AuthContext";
 
 const emptyForm = {
@@ -18,9 +19,11 @@ const AdminEmployees = () => {
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [filters, setFilters] = useState({ search: "", rol: "", estado: "" });
+  const [filters, setFilters] = useState({ search: "", rol: "", estado: "", soloIncompletos: false });
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
+  const [highlightMissing, setHighlightMissing] = useState(true);
+  const [departments, setDepartments] = useState([]);
 
   const load = async () => {
     setLoading(true);
@@ -43,7 +46,17 @@ const AdminEmployees = () => {
 
   useEffect(() => {
     load();
+    loadDepartments();
   }, []);
+
+  const loadDepartments = async () => {
+    try {
+      const data = await listDepartments();
+      setDepartments(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("No se pudieron cargar departamentos", err);
+    }
+  };
 
   const filtered = useMemo(() => {
     return employees.filter((e) => {
@@ -51,21 +64,23 @@ const AdminEmployees = () => {
         ? `${e.nombre || ""} ${e.email || ""}`.toLowerCase().includes(filters.search.toLowerCase())
         : true;
       const r = filters.rol ? (e.cargo || "").toLowerCase() === filters.rol.toLowerCase() : true;
-      const st = filters.estado ? (e.estado || "").toUpperCase() === filters.estado.toUpperCase() : true;
-      return s && r && st;
+      const estadoValue = e.estadoLaboral || e.estado || "";
+      const st = filters.estado ? estadoValue.toUpperCase() === filters.estado.toUpperCase() : true;
+      const inc = filters.soloIncompletos ? e.incompleto : true;
+      return s && r && st && inc;
     });
   }, [employees, filters]);
 
   const handleEdit = (emp) => {
-    setEditingId(emp.id);
+    setEditingId(emp.id || null);
     setForm({
       usuarioId: emp.usuarioId || "",
       nombre: emp.nombre,
       rol: emp.cargo,
       email: emp.email,
       sueldo: emp.sueldoBase,
-      estado: emp.estadoLaboral || "ACTIVO",
-      departamento: emp.departamento || "NONE",
+      estado: emp.estadoLaboral || emp.estado || "ACTIVO",
+      departamento: emp.departamentoId ? String(emp.departamentoId) : emp.departamento || "NONE",
       fechaContratacion: emp.fechaContratacion ? emp.fechaContratacion.slice(0, 10) : "",
     });
   };
@@ -194,13 +209,18 @@ const AdminEmployees = () => {
                 </div>
                 <div className="col-md-6">
                   <label className="form-label">Departamento</label>
-                  <input
-                    type="text"
-                    className="form-control"
+                  <select
+                    className="form-select"
                     value={form.departamento}
                     onChange={(e) => setForm((p) => ({ ...p, departamento: e.target.value }))}
-                    placeholder="NONE si no aplica"
-                  />
+                  >
+                    <option value="NONE">Sin departamento</option>
+                    {departments.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.nombre}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div className="col-md-6">
                   <label className="form-label">Fecha de contratación</label>
@@ -289,6 +309,21 @@ const AdminEmployees = () => {
                     <option value="INACTIVO">Inactivo</option>
                   </select>
                 </div>
+                <div className="col-6 col-lg-2">
+                  <label className="form-label small text-muted mb-1">Validación</label>
+                  <div className="form-check">
+                    <input
+                      className="form-check-input"
+                      type="checkbox"
+                      id="filtroIncompletos"
+                      checked={filters.soloIncompletos}
+                      onChange={(e) => setFilters((p) => ({ ...p, soloIncompletos: e.target.checked }))}
+                    />
+                    <label className="form-check-label small text-muted" htmlFor="filtroIncompletos">
+                      Solo incompletos
+                    </label>
+                  </div>
+                </div>
               </div>
 
               <div className="table-responsive">
@@ -315,30 +350,37 @@ const AdminEmployees = () => {
                     )}
                     {!loading &&
                       filtered.map((e) => (
-                        <tr key={e.id}>
-                          <td className="py-3">{e.id}</td>
+                        <tr
+                          key={`${e.id || "usr"}-${e.usuarioId}`}
+                          className={highlightMissing && e.incompleto ? "table-warning" : ""}
+                        >
+                          <td className="py-3">{e.id || "—"}</td>
                           <td className="py-3 fw-semibold">{e.nombre}</td>
-                          <td className="py-3 text-muted">{e.cargo || e.rol}</td>
+                          <td className="py-3 text-muted">{e.cargo || e.rol || "—"}</td>
                           <td className="py-3">{e.email}</td>
                           <td className="py-3">{e.departamento || "NONE"}</td>
-                          <td className="py-3">$ {Number(e.sueldoBase || e.sueldo || 0).toLocaleString()}</td>
+                          <td className="py-3">
+                            {e.sueldoBase || e.sueldo
+                              ? `$ ${Number(e.sueldoBase || e.sueldo || 0).toLocaleString()}`
+                              : "—"}
+                          </td>
                           <td className="py-3">
                             <span
                               className={
-                                (e.estado || "ACTIVO").toUpperCase() === "ACTIVO"
+                                (e.estadoLaboral || e.estado || "ACTIVO").toUpperCase() === "ACTIVO"
                                   ? "badge bg-success-subtle text-success border"
                                   : "badge bg-secondary-subtle text-secondary border"
                               }
                             >
-                              {e.estado || "ACTIVO"}
+                              {e.estadoLaboral || e.estado || "ACTIVO"}
                             </span>
                           </td>
                           <td className="text-end py-3">
                             <div className="btn-group btn-group-sm">
                               <button className="btn btn-outline-primary" type="button" onClick={() => handleEdit(e)}>
-                                Editar
+                                {e.id ? "Editar" : "Completar"}
                               </button>
-                              <button className="btn btn-outline-danger" type="button" disabled>
+                              <button className="btn btn-outline-danger" type="button" disabled={!e.id}>
                                 Eliminar
                               </button>
                             </div>

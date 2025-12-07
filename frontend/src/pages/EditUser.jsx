@@ -8,6 +8,7 @@ const EditUser = () => {
   const navigate = useNavigate();
 
   const [initialValues, setInitialValues] = useState({
+    rut: "",
     name: "",
     apellido1: "",
     apellido2: "",
@@ -26,6 +27,7 @@ const EditUser = () => {
       try {
         const { data } = await getUserById(id);
         setInitialValues({
+          rut: data?.id ? String(data.id) : "",
           name: data?.name || "",
           apellido1: data?.apellido1 || "",
           apellido2: data?.apellido2 || "",
@@ -52,8 +54,8 @@ const EditUser = () => {
     setError(null);
 
     try {
-      const { password, ...rest } = formData;
-      const payloadBase = password ? formData : rest; // No enviar contraseña vacía
+      const { password, rut, ...rest } = formData;
+      const payloadBase = password ? { ...rest, password } : rest; // No enviar contraseña vacía
       const payload = {
         ...payloadBase,
         roles: payloadBase.role ? [String(payloadBase.role).toUpperCase()] : ["USER"],
@@ -89,6 +91,7 @@ const EditUser = () => {
         error={error}
         submitLabel="Actualizar usuario"
         onCancel={() => navigate("/admin/users")}
+        rutDisabled
         passwordOptional
       />
     </div>

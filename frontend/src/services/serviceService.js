@@ -15,10 +15,17 @@ export const deleteService = (id) =>
 export const changeServiceStatus = (id, estado) =>
   api.patch(`/services/${id}/status`, { estado }).then((res) => res.data);
 
+export const fetchServiceProducts = (serviceId) =>
+  api.get(`/services/${serviceId}/products`).then((res) => res.data);
+
+export const fetchServiceCategories = () => api.get("/services/categories").then((res) => res.data);
+
 export default {
   listServices,
   createService,
   updateService,
   deleteService,
   changeServiceStatus,
+  fetchServiceProducts,
+  fetchServiceCategories,
 };

@@ -8,11 +8,13 @@ const experienceRoutes = require('./experiences');
 const reservationRoutes = require('./reservations');
 const serviceRoutes = require('./services');
 const reservationServiceRoutes = require('./reservationServices');
+const contactRoutes = require('./contacts');
 const productRoutes = require('./products');
 const providerRoutes = require('./providers');
 const purchaseRoutes = require('./purchases');
 const departmentRoutes = require('./departments');
 const employeeRoutes = require('./employees');
+const reportRoutes = require('./reports');
 const { asyncHandler } = require('../utils/errors');
 const { withConnection } = require('../db');
 
@@ -27,11 +29,13 @@ router.use(experienceRoutes);
 router.use(reservationRoutes);
 router.use(serviceRoutes);
 router.use(reservationServiceRoutes);
+router.use(contactRoutes);
 router.use(productRoutes);
 router.use(providerRoutes);
 router.use(purchaseRoutes);
 router.use(departmentRoutes);
 router.use(employeeRoutes);
+router.use(reportRoutes);
 
 router.get('/ping', (req, res) => {
   res.json({ ok: true });

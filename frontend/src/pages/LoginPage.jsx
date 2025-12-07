@@ -1,6 +1,6 @@
 // src/pages/LoginPage.jsx
 import { useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import FormField from "../components/FormField";
 import PasswordField from "../components/PasswordField";
 import { useAuth } from "../context/AuthContext";
@@ -16,6 +16,7 @@ const Card = ({ title, children, footer }) => (
 );
 
 const initialFormState = {
+  rut: "",
   name: "",
   apellido1: "",
   apellido2: "",
@@ -26,10 +27,10 @@ const initialFormState = {
 };
 
 const phoneRegex = /^[0-9]{7,15}$/;
+const rutRegex = /^[0-9]{7,8}$/;
 
 const LoginPage = () => {
   const navigate = useNavigate();
-  const location = useLocation();
   const { login, register } = useAuth();
 
   const [formData, setFormData] = useState(initialFormState);
@@ -43,6 +44,10 @@ const LoginPage = () => {
   };
 
   const validateRegister = () => {
+    const rutDigits = formData.rut.replace(/\D/g, "");
+    if (!rutDigits || !rutRegex.test(rutDigits)) {
+      return "RUT inválido. Usa 7-8 dígitos sin puntos ni dígito verificador.";
+    }
     if (!formData.name.trim() || !formData.apellido1.trim()) {
       return "Nombre y apellido paterno son obligatorios.";
     }
@@ -80,8 +85,10 @@ const LoginPage = () => {
 
     try {
       const action = isRegisterMode ? register : login;
+      const rutDigits = formData.rut.replace(/\D/g, "");
       const payload = isRegisterMode
         ? {
+            codUsuario: rutDigits,
             name: formData.name,
             apellido1: formData.apellido1,
             apellido2: formData.apellido2,
@@ -89,8 +96,8 @@ const LoginPage = () => {
             email: formData.email,
             password: formData.password,
             role: "USER",
-          }
-        : { email: formData.email, password: formData.password };
+        }
+      : { email: formData.email, password: formData.password };
 
       const auth = await action(payload);
       const userRoles = Array.isArray(auth?.user?.roles)
@@ -98,8 +105,7 @@ const LoginPage = () => {
         : auth?.user?.role
           ? [String(auth.user.role).toUpperCase()]
           : [];
-      const fallback = resolveRedirect(userRoles);
-      const redirectTo = location.state?.from?.pathname || fallback;
+      const redirectTo = resolveRedirect(userRoles);
       navigate(redirectTo, { replace: true });
     } catch (err) {
       setError(
@@ -135,6 +141,18 @@ const LoginPage = () => {
         <form onSubmit={handleSubmit}>
           {isRegisterMode && (
             <>
+              <FormField
+                id="rut"
+                name="rut"
+                label="RUT (sin DV ni puntos)"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]{7,8}"
+                value={formData.rut}
+                onChange={handleChange}
+                required
+                placeholder="Ej: 12345678"
+              />
               <FormField
                 id="name"
                 name="name"

@@ -1,0 +1,7 @@
+Cambios pendientes antes de la entrega
+======================================
+1) Base_de_datos.sql: eliminar la definición duplicada de JRGY_DEPARTAMENTO (una extendida con PRESUPUESTO/FECHA_CREACION y otra básica). Dejar solo la versión extendida y su secuencia/trigger para evitar ORA-00955.
+2) Clave de usuario (RUT): mantener sin secuencia/trigger. COD_USUARIO es el RUT chileno sin dígito verificador ni puntos (ej.: “12.345.678-0” se guarda como 12345678). Dejar el CHECK de rango y documentar en la entrega que el autoincremento no aplica.
+3) Funciones: si la rúbrica exige prefijo de iniciales, renombrar FN_CALC_IVA/FN_CALC_COMISION/FN_STOCK_DISP con el prefijo requerido y propagar en código que las use (gestores/triggers).
+4) Normalización estricta: los campos derivados (PRECIO_TOTAL, TOTAL_SERVICIOS, TOTAL en cabeceras/detalles) son denormalizaciones controladas. Si la revisión pide 3FN estricta, documentar o recalcular vía vistas en vez de almacenar.
+5) Verificación final: correr el script completo en limpio para asegurar que no queden ORA-00955/ORA-00942 y que todos los procedimientos/paquetes compilen después del ajuste del punto 1.

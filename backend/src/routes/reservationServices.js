@@ -4,6 +4,7 @@ const { asyncHandler, AppError } = require('../utils/errors');
 const { withConnection } = require('../db');
 const { extractToken, requireUserFromToken } = require('../services/authService');
 const { hasRole } = require('../utils/authz');
+const { firstOutValue } = require('../utils/oracle');
 
 const EDITABLE_STATES = ['CREADA', 'CONFIRMADA', 'EN_PROCESO'];
 
@@ -212,7 +213,7 @@ router.post(
           { autoCommit: true }
         );
 
-        const newId = result.outBinds.id[0];
+        const newId = firstOutValue(result.outBinds.id);
         const row = await conn.execute(
           `
             SELECT

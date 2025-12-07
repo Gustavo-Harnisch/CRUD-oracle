@@ -1,0 +1,467 @@
+-- Modulo de contacto: tablas, secuencias, datos semilla y procedimientos
+-- Ejecutar este script despues de crear las tablas base (usuarios/empleados) para asegurar FKs.
+
+PROMPT Limpieza previa de objetos de contacto...
+DECLARE
+    PROCEDURE safe_drop(p_sql VARCHAR2) IS
+    BEGIN
+        EXECUTE IMMEDIATE p_sql;
+    EXCEPTION
+        WHEN OTHERS THEN
+            IF SQLCODE NOT IN (-4043, -4044, -4045, -4080, -2289, -942) THEN
+                RAISE;
+            END IF;
+    END;
+BEGIN
+    safe_drop('DROP TRIGGER TRG_PK_CONTACTO');
+    safe_drop('DROP TRIGGER TRG_PK_CONTACTO_RESPUESTA');
+    safe_drop('DROP TRIGGER TRG_PK_CAT_TIPO_CONTACTO');
+    safe_drop('DROP TRIGGER TRG_PK_CAT_ESTADO_CONTACTO');
+    safe_drop('DROP SEQUENCE SQ_PK_CONTACTO');
+    safe_drop('DROP SEQUENCE SQ_PK_CONTACTO_RESPUESTA');
+    safe_drop('DROP SEQUENCE SQ_PK_CAT_TIPO_CONTACTO');
+    safe_drop('DROP SEQUENCE SQ_PK_CAT_ESTADO_CONTACTO');
+    safe_drop('DROP TABLE JRGY_CONTACTO_RESPUESTA CASCADE CONSTRAINTS');
+    safe_drop('DROP TABLE JRGY_CONTACTO CASCADE CONSTRAINTS');
+    safe_drop('DROP TABLE JRGY_CAT_TIPO_CONTACTO CASCADE CONSTRAINTS');
+    safe_drop('DROP TABLE JRGY_CAT_ESTADO_CONTACTO CASCADE CONSTRAINTS');
+END;
+/
+
+PROMPT Creando catalogos de contacto...
+CREATE TABLE JRGY_CAT_TIPO_CONTACTO (
+    COD_TIPO            NUMBER NOT NULL,
+    NOMBRE              VARCHAR2(80) NOT NULL,
+    DESCRIPCION         VARCHAR2(250)
+);
+
+ALTER TABLE JRGY_CAT_TIPO_CONTACTO ADD CONSTRAINT PK_JRGY_CAT_TIPO_CONTACTO PRIMARY KEY (COD_TIPO);
+ALTER TABLE JRGY_CAT_TIPO_CONTACTO ADD CONSTRAINT UQ_JRGY_CAT_TIPO_CONTACTO_N UNIQUE (NOMBRE);
+
+CREATE TABLE JRGY_CAT_ESTADO_CONTACTO (
+    COD_ESTADO      NUMBER NOT NULL,
+    NOMBRE          VARCHAR2(50) NOT NULL
+);
+
+ALTER TABLE JRGY_CAT_ESTADO_CONTACTO ADD CONSTRAINT PK_JRGY_CAT_ESTADO_CONTACTO PRIMARY KEY (COD_ESTADO);
+ALTER TABLE JRGY_CAT_ESTADO_CONTACTO ADD CONSTRAINT UQ_JRGY_CAT_ESTADO_CONTACTO_N UNIQUE (NOMBRE);
+
+PROMPT Creando tablas principales de contacto...
+CREATE TABLE JRGY_CONTACTO (
+    COD_CONTACTO            NUMBER NOT NULL,
+    COD_USUARIO             NUMBER,
+    NOMBRE                  VARCHAR2(120) NOT NULL,
+    EMAIL                   VARCHAR2(150) NOT NULL,
+    TELEFONO                VARCHAR2(40),
+    COD_TIPO                NUMBER NOT NULL,
+    ASUNTO                  VARCHAR2(200),
+    MENSAJE                 CLOB NOT NULL,
+    CANAL_RESPUESTA         VARCHAR2(20) DEFAULT 'EMAIL',
+    PRIORIDAD               VARCHAR2(10) DEFAULT 'MEDIA',
+    COD_ESTADO              NUMBER NOT NULL,
+    COD_EMPLEADO_ASIGNADO   NUMBER,
+    FECHA_CREACION          DATE DEFAULT SYSDATE,
+    FECHA_RESPUESTA         DATE
+);
+
+ALTER TABLE JRGY_CONTACTO ADD CONSTRAINT PK_JRGY_CONTACTO PRIMARY KEY (COD_CONTACTO);
+ALTER TABLE JRGY_CONTACTO ADD CONSTRAINT FK_JRGY_CONTACTO_USUARIO FOREIGN KEY (COD_USUARIO) REFERENCES JRGY_USUARIO (COD_USUARIO);
+ALTER TABLE JRGY_CONTACTO ADD CONSTRAINT FK_JRGY_CONTACTO_TIPO FOREIGN KEY (COD_TIPO) REFERENCES JRGY_CAT_TIPO_CONTACTO (COD_TIPO);
+ALTER TABLE JRGY_CONTACTO ADD CONSTRAINT FK_JRGY_CONTACTO_ESTADO FOREIGN KEY (COD_ESTADO) REFERENCES JRGY_CAT_ESTADO_CONTACTO (COD_ESTADO);
+ALTER TABLE JRGY_CONTACTO ADD CONSTRAINT FK_JRGY_CONTACTO_EMPLEADO FOREIGN KEY (COD_EMPLEADO_ASIGNADO) REFERENCES JRGY_EMPLEADO (COD_EMPLEADO);
+ALTER TABLE JRGY_CONTACTO ADD CONSTRAINT CK_JRGY_CONTACTO_PRIORIDAD CHECK (PRIORIDAD IN ('BAJA','MEDIA','ALTA'));
+
+CREATE TABLE JRGY_CONTACTO_RESPUESTA (
+    COD_RESPUESTA      NUMBER NOT NULL,
+    COD_CONTACTO       NUMBER NOT NULL,
+    COD_EMPLEADO       NUMBER NOT NULL,
+    MENSAJE            CLOB NOT NULL,
+    CANAL_ENVIADO      VARCHAR2(20),
+    FECHA_RESPUESTA    DATE DEFAULT SYSDATE,
+    ES_PUBLICA         CHAR(1) DEFAULT 'Y'
+);
+
+ALTER TABLE JRGY_CONTACTO_RESPUESTA ADD CONSTRAINT PK_JRGY_CONTACTO_RESP PRIMARY KEY (COD_RESPUESTA);
+ALTER TABLE JRGY_CONTACTO_RESPUESTA ADD CONSTRAINT FK_JRGY_RESP_CONTACTO FOREIGN KEY (COD_CONTACTO) REFERENCES JRGY_CONTACTO (COD_CONTACTO);
+ALTER TABLE JRGY_CONTACTO_RESPUESTA ADD CONSTRAINT FK_JRGY_RESP_EMPLEADO FOREIGN KEY (COD_EMPLEADO) REFERENCES JRGY_EMPLEADO (COD_EMPLEADO);
+ALTER TABLE JRGY_CONTACTO_RESPUESTA ADD CONSTRAINT CK_JRGY_RESP_PUBLICA CHECK (ES_PUBLICA IN ('Y','N'));
+
+PROMPT Creando secuencias y triggers de PK...
+CREATE SEQUENCE SQ_PK_CAT_TIPO_CONTACTO START WITH 1 INCREMENT BY 1 NOCACHE;
+CREATE OR REPLACE TRIGGER TRG_PK_CAT_TIPO_CONTACTO
+BEFORE INSERT ON JRGY_CAT_TIPO_CONTACTO
+FOR EACH ROW
+BEGIN
+    IF :NEW.COD_TIPO IS NULL THEN
+        SELECT SQ_PK_CAT_TIPO_CONTACTO.NEXTVAL INTO :NEW.COD_TIPO FROM dual;
+    END IF;
+END;
+/
+
+CREATE SEQUENCE SQ_PK_CAT_ESTADO_CONTACTO START WITH 1 INCREMENT BY 1 NOCACHE;
+CREATE OR REPLACE TRIGGER TRG_PK_CAT_ESTADO_CONTACTO
+BEFORE INSERT ON JRGY_CAT_ESTADO_CONTACTO
+FOR EACH ROW
+BEGIN
+    IF :NEW.COD_ESTADO IS NULL THEN
+        SELECT SQ_PK_CAT_ESTADO_CONTACTO.NEXTVAL INTO :NEW.COD_ESTADO FROM dual;
+    END IF;
+END;
+/
+
+CREATE SEQUENCE SQ_PK_CONTACTO START WITH 1 INCREMENT BY 1 NOCACHE;
+CREATE OR REPLACE TRIGGER TRG_PK_CONTACTO
+BEFORE INSERT ON JRGY_CONTACTO
+FOR EACH ROW
+BEGIN
+    IF :NEW.COD_CONTACTO IS NULL THEN
+        SELECT SQ_PK_CONTACTO.NEXTVAL INTO :NEW.COD_CONTACTO FROM dual;
+    END IF;
+END;
+/
+
+CREATE SEQUENCE SQ_PK_CONTACTO_RESPUESTA START WITH 1 INCREMENT BY 1 NOCACHE;
+CREATE OR REPLACE TRIGGER TRG_PK_CONTACTO_RESPUESTA
+BEFORE INSERT ON JRGY_CONTACTO_RESPUESTA
+FOR EACH ROW
+BEGIN
+    IF :NEW.COD_RESPUESTA IS NULL THEN
+        SELECT SQ_PK_CONTACTO_RESPUESTA.NEXTVAL INTO :NEW.COD_RESPUESTA FROM dual;
+    END IF;
+END;
+/
+
+PROMPT Sembrando catalogos basicos (tipo/estado)...
+MERGE INTO JRGY_CAT_TIPO_CONTACTO t
+USING (
+    SELECT 1 AS COD, 'CONSULTA' AS NOMBRE, 'Pregunta general' AS DESCRIPCION FROM dual UNION ALL
+    SELECT 2, 'RECLAMO', 'Problema o queja' FROM dual UNION ALL
+    SELECT 3, 'RESERVA', 'Consulta sobre reservas' FROM dual UNION ALL
+    SELECT 4, 'TRABAJO', 'Interes laboral' FROM dual
+) src
+ON (t.COD_TIPO = src.COD)
+WHEN MATCHED THEN
+    UPDATE SET t.NOMBRE = src.NOMBRE, t.DESCRIPCION = src.DESCRIPCION
+WHEN NOT MATCHED THEN
+    INSERT (COD_TIPO, NOMBRE, DESCRIPCION) VALUES (src.COD, src.NOMBRE, src.DESCRIPCION);
+
+MERGE INTO JRGY_CAT_ESTADO_CONTACTO e
+USING (
+    SELECT 1 AS COD, 'RECIBIDO' AS NOMBRE FROM dual UNION ALL
+    SELECT 2, 'EN_PROCESO' FROM dual UNION ALL
+    SELECT 3, 'RESPONDIDO' FROM dual UNION ALL
+    SELECT 4, 'ARCHIVADO' FROM dual
+) src
+ON (e.COD_ESTADO = src.COD)
+WHEN MATCHED THEN
+    UPDATE SET e.NOMBRE = src.NOMBRE
+WHEN NOT MATCHED THEN
+    INSERT (COD_ESTADO, NOMBRE) VALUES (src.COD, src.NOMBRE);
+
+PROMPT Procedimientos del modulo contacto...
+CREATE OR REPLACE PROCEDURE JRGY_PRO_CONTACTO_CREAR(
+    p_user_id           IN NUMBER,
+    p_nombre            IN VARCHAR2,
+    p_email             IN VARCHAR2,
+    p_tel               IN VARCHAR2,
+    p_tipo              IN VARCHAR2,
+    p_asunto            IN VARCHAR2,
+    p_mensaje           IN CLOB,
+    p_canal_respuesta   IN VARCHAR2,
+    p_id                OUT NUMBER
+) AS
+    v_tipo_id       NUMBER;
+    v_estado_id     NUMBER;
+    v_estado_ini    CONSTANT VARCHAR2(20) := 'RECIBIDO';
+    v_user_email    VARCHAR2(150);
+BEGIN
+    IF p_nombre IS NULL OR TRIM(p_nombre) = '' THEN
+        RAISE_APPLICATION_ERROR(-20225, 'Nombre requerido');
+    END IF;
+    IF p_email IS NULL OR TRIM(p_email) = '' THEN
+        RAISE_APPLICATION_ERROR(-20226, 'Email requerido');
+    END IF;
+    IF p_mensaje IS NULL OR DBMS_LOB.getlength(p_mensaje) = 0 THEN
+        RAISE_APPLICATION_ERROR(-20227, 'Mensaje requerido');
+    END IF;
+
+    BEGIN
+        SELECT COD_TIPO INTO v_tipo_id FROM JRGY_CAT_TIPO_CONTACTO WHERE UPPER(NOMBRE) = UPPER(p_tipo);
+    EXCEPTION
+        WHEN NO_DATA_FOUND THEN
+            RAISE_APPLICATION_ERROR(-20221, 'Tipo de contacto no encontrado');
+    END;
+
+    BEGIN
+        SELECT COD_ESTADO INTO v_estado_id FROM JRGY_CAT_ESTADO_CONTACTO WHERE UPPER(NOMBRE) = UPPER(v_estado_ini);
+    EXCEPTION
+        WHEN NO_DATA_FOUND THEN
+            RAISE_APPLICATION_ERROR(-20222, 'Estado inicial no disponible');
+    END;
+
+    IF p_user_id IS NOT NULL THEN
+        BEGIN
+            SELECT EMAIL_USUARIO INTO v_user_email FROM JRGY_USUARIO WHERE COD_USUARIO = p_user_id;
+        EXCEPTION
+            WHEN NO_DATA_FOUND THEN
+                RAISE_APPLICATION_ERROR(-20228, 'Usuario no encontrado');
+        END;
+        IF LOWER(v_user_email) <> LOWER(p_email) THEN
+            RAISE_APPLICATION_ERROR(-20229, 'El email no coincide con el usuario autenticado');
+        END IF;
+    END IF;
+
+    INSERT INTO JRGY_CONTACTO (
+        COD_USUARIO, NOMBRE, EMAIL, TELEFONO, COD_TIPO, ASUNTO, MENSAJE,
+        CANAL_RESPUESTA, PRIORIDAD, COD_ESTADO, FECHA_CREACION
+    )
+    VALUES (
+        p_user_id, p_nombre, p_email, p_tel, v_tipo_id, p_asunto, p_mensaje,
+        NVL(p_canal_respuesta, 'EMAIL'), 'MEDIA', v_estado_id, SYSDATE
+    )
+    RETURNING COD_CONTACTO INTO p_id;
+END;
+/
+
+CREATE OR REPLACE PROCEDURE JRGY_PRO_CONTACTO_LISTAR(
+    p_es_admin      IN NUMBER,
+    p_empleado_id   IN NUMBER,
+    p_user_id       IN NUMBER,
+    p_estado        IN VARCHAR2,
+    p_tipo          IN VARCHAR2,
+    p_busqueda      IN VARCHAR2,
+    cur             OUT SYS_REFCURSOR
+) AS
+    v_estado_id NUMBER;
+    v_tipo_id NUMBER;
+BEGIN
+    -- Permiso minimo: admin/empleado o user_id presente
+    IF NVL(p_es_admin, 0) <> 1 AND p_empleado_id IS NULL AND p_user_id IS NULL THEN
+        RAISE_APPLICATION_ERROR(-20223, 'No autorizado para listar contactos');
+    END IF;
+
+    IF p_estado IS NOT NULL THEN
+        BEGIN
+            SELECT COD_ESTADO INTO v_estado_id FROM JRGY_CAT_ESTADO_CONTACTO WHERE UPPER(NOMBRE) = UPPER(p_estado);
+        EXCEPTION
+            WHEN NO_DATA_FOUND THEN v_estado_id := NULL;
+        END;
+    END IF;
+
+    IF p_tipo IS NOT NULL THEN
+        BEGIN
+            SELECT COD_TIPO INTO v_tipo_id FROM JRGY_CAT_TIPO_CONTACTO WHERE UPPER(NOMBRE) = UPPER(p_tipo);
+        EXCEPTION
+            WHEN NO_DATA_FOUND THEN v_tipo_id := NULL;
+        END;
+    END IF;
+
+    OPEN cur FOR
+        SELECT
+            c.COD_CONTACTO,
+            c.NOMBRE,
+            c.EMAIL,
+            c.TELEFONO,
+            c.ASUNTO,
+            c.MENSAJE,
+            c.CANAL_RESPUESTA,
+            c.PRIORIDAD,
+            c.FECHA_CREACION,
+            c.FECHA_RESPUESTA,
+            c.COD_USUARIO,
+            c.COD_EMPLEADO_ASIGNADO,
+            tc.NOMBRE AS TIPO,
+            es.NOMBRE AS ESTADO,
+            eu.NOMBRE_USUARIO || ' ' || eu.APELLIDO1_USUARIO AS NOMBRE_USUARIO,
+            ee.NOMBRE_USUARIO || ' ' || ee.APELLIDO1_USUARIO AS EMPLEADO_ASIGNADO,
+            (SELECT COUNT(*) FROM JRGY_CONTACTO_RESPUESTA r WHERE r.COD_CONTACTO = c.COD_CONTACTO) AS RESPUESTAS
+        FROM JRGY_CONTACTO c
+            INNER JOIN JRGY_CAT_TIPO_CONTACTO tc ON tc.COD_TIPO = c.COD_TIPO
+            INNER JOIN JRGY_CAT_ESTADO_CONTACTO es ON es.COD_ESTADO = c.COD_ESTADO
+            LEFT JOIN JRGY_USUARIO eu ON eu.COD_USUARIO = c.COD_USUARIO
+            LEFT JOIN JRGY_EMPLEADO e ON e.COD_EMPLEADO = c.COD_EMPLEADO_ASIGNADO
+            LEFT JOIN JRGY_USUARIO ee ON ee.COD_USUARIO = e.COD_USUARIO
+        WHERE (v_estado_id IS NULL OR c.COD_ESTADO = v_estado_id)
+          AND (v_tipo_id IS NULL OR c.COD_TIPO = v_tipo_id)
+          AND (
+                NVL(p_es_admin,0) = 1
+                OR (p_empleado_id IS NOT NULL AND (c.COD_EMPLEADO_ASIGNADO = p_empleado_id OR c.COD_EMPLEADO_ASIGNADO IS NULL))
+                OR (p_user_id IS NOT NULL AND c.COD_USUARIO = p_user_id)
+              )
+          AND (
+                p_busqueda IS NULL
+                OR UPPER(c.NOMBRE) LIKE '%' || UPPER(p_busqueda) || '%'
+                OR UPPER(c.EMAIL) LIKE '%' || UPPER(p_busqueda) || '%'
+                OR UPPER(c.ASUNTO) LIKE '%' || UPPER(p_busqueda) || '%'
+              )
+        ORDER BY c.FECHA_CREACION DESC;
+END;
+/
+
+CREATE OR REPLACE PROCEDURE JRGY_PRO_CONTACTO_OBTENER(
+    p_id        IN NUMBER,
+    cur_contact OUT SYS_REFCURSOR,
+    cur_resp    OUT SYS_REFCURSOR
+) AS
+    v_count NUMBER;
+BEGIN
+    SELECT COUNT(*) INTO v_count FROM JRGY_CONTACTO WHERE COD_CONTACTO = p_id;
+    IF v_count = 0 THEN
+        RAISE_APPLICATION_ERROR(-20220, 'Contacto no encontrado');
+    END IF;
+
+    OPEN cur_contact FOR
+        SELECT
+            c.COD_CONTACTO,
+            c.NOMBRE,
+            c.EMAIL,
+            c.TELEFONO,
+            c.ASUNTO,
+            c.MENSAJE,
+            c.CANAL_RESPUESTA,
+            c.PRIORIDAD,
+            c.FECHA_CREACION,
+            c.FECHA_RESPUESTA,
+            c.COD_USUARIO,
+            c.COD_EMPLEADO_ASIGNADO,
+            tc.NOMBRE AS TIPO,
+            es.NOMBRE AS ESTADO,
+            eu.NOMBRE_USUARIO || ' ' || eu.APELLIDO1_USUARIO AS NOMBRE_USUARIO,
+            ee.NOMBRE_USUARIO || ' ' || ee.APELLIDO1_USUARIO AS EMPLEADO_ASIGNADO,
+            (SELECT COUNT(*) FROM JRGY_CONTACTO_RESPUESTA r WHERE r.COD_CONTACTO = c.COD_CONTACTO) AS RESPUESTAS
+        FROM JRGY_CONTACTO c
+            INNER JOIN JRGY_CAT_TIPO_CONTACTO tc ON tc.COD_TIPO = c.COD_TIPO
+            INNER JOIN JRGY_CAT_ESTADO_CONTACTO es ON es.COD_ESTADO = c.COD_ESTADO
+            LEFT JOIN JRGY_USUARIO eu ON eu.COD_USUARIO = c.COD_USUARIO
+            LEFT JOIN JRGY_EMPLEADO e ON e.COD_EMPLEADO = c.COD_EMPLEADO_ASIGNADO
+            LEFT JOIN JRGY_USUARIO ee ON ee.COD_USUARIO = e.COD_USUARIO
+        WHERE c.COD_CONTACTO = p_id;
+
+    OPEN cur_resp FOR
+        SELECT
+            r.COD_RESPUESTA,
+            r.COD_CONTACTO,
+            r.COD_EMPLEADO,
+            r.MENSAJE,
+            r.CANAL_ENVIADO,
+            r.FECHA_RESPUESTA,
+            r.ES_PUBLICA,
+            eu.NOMBRE_USUARIO || ' ' || eu.APELLIDO1_USUARIO AS EMPLEADO_NOMBRE
+        FROM JRGY_CONTACTO_RESPUESTA r
+            INNER JOIN JRGY_EMPLEADO e ON e.COD_EMPLEADO = r.COD_EMPLEADO
+            INNER JOIN JRGY_USUARIO eu ON eu.COD_USUARIO = e.COD_USUARIO
+        WHERE r.COD_CONTACTO = p_id
+        ORDER BY r.FECHA_RESPUESTA DESC;
+END;
+/
+
+CREATE OR REPLACE PROCEDURE JRGY_PRO_CONTACTO_ASIGNAR(
+    p_id            IN NUMBER,
+    p_empleado_id   IN NUMBER
+) AS
+    v_estado_proc NUMBER;
+    v_estado_rec NUMBER;
+BEGIN
+    IF p_empleado_id IS NULL THEN
+        RAISE_APPLICATION_ERROR(-20230, 'Empleado requerido para asignar');
+    END IF;
+
+    BEGIN
+        SELECT COD_ESTADO INTO v_estado_rec FROM JRGY_CAT_ESTADO_CONTACTO WHERE UPPER(NOMBRE) = 'RECIBIDO';
+        SELECT COD_ESTADO INTO v_estado_proc FROM JRGY_CAT_ESTADO_CONTACTO WHERE UPPER(NOMBRE) = 'EN_PROCESO';
+    EXCEPTION
+        WHEN NO_DATA_FOUND THEN
+            RAISE_APPLICATION_ERROR(-20222, 'Estados de contacto no configurados');
+    END;
+
+    UPDATE JRGY_CONTACTO
+        SET COD_EMPLEADO_ASIGNADO = p_empleado_id,
+            COD_ESTADO = v_estado_proc
+        WHERE COD_CONTACTO = p_id;
+    IF SQL%ROWCOUNT = 0 THEN
+        RAISE_APPLICATION_ERROR(-20220, 'Contacto no encontrado');
+    END IF;
+END;
+/
+
+CREATE OR REPLACE PROCEDURE JRGY_PRO_CONTACTO_CAMBIAR_ESTADO(
+    p_id        IN NUMBER,
+    p_estado    IN VARCHAR2,
+    p_notas     IN VARCHAR2
+) AS
+    v_estado_id NUMBER;
+BEGIN
+    BEGIN
+        SELECT COD_ESTADO INTO v_estado_id FROM JRGY_CAT_ESTADO_CONTACTO WHERE UPPER(NOMBRE) = UPPER(p_estado);
+    EXCEPTION
+        WHEN NO_DATA_FOUND THEN
+            RAISE_APPLICATION_ERROR(-20222, 'Estado de contacto no encontrado');
+    END;
+
+    UPDATE JRGY_CONTACTO
+        SET COD_ESTADO = v_estado_id,
+            FECHA_RESPUESTA = CASE WHEN UPPER(p_estado) = 'RESPONDIDO' THEN SYSDATE ELSE FECHA_RESPUESTA END
+        WHERE COD_CONTACTO = p_id;
+
+    IF SQL%ROWCOUNT = 0 THEN
+        RAISE_APPLICATION_ERROR(-20220, 'Contacto no encontrado');
+    END IF;
+
+    -- Nota opcional: se podria registrar p_notas como respuesta interna
+    IF p_notas IS NOT NULL AND TRIM(p_notas) <> '' THEN
+        DECLARE
+            v_dummy NUMBER;
+        BEGIN
+            NULL; -- lugar para insertar nota interna si se requiere (no obligatorio)
+        END;
+    END IF;
+END;
+/
+
+CREATE OR REPLACE PROCEDURE JRGY_PRO_CONTACTO_RESPONDER(
+    p_id            IN NUMBER,
+    p_empleado_id   IN NUMBER,
+    p_mensaje       IN CLOB,
+    p_canal         IN VARCHAR2,
+    p_es_publica    IN VARCHAR2
+) AS
+    v_estado_resp NUMBER;
+BEGIN
+    IF p_mensaje IS NULL OR DBMS_LOB.getlength(p_mensaje) = 0 THEN
+        RAISE_APPLICATION_ERROR(-20227, 'Mensaje requerido');
+    END IF;
+    IF p_empleado_id IS NULL THEN
+        RAISE_APPLICATION_ERROR(-20230, 'Empleado requerido para responder');
+    END IF;
+
+    DECLARE
+        v_contact_exists NUMBER;
+    BEGIN
+        SELECT COUNT(*) INTO v_contact_exists FROM JRGY_CONTACTO WHERE COD_CONTACTO = p_id;
+        IF v_contact_exists = 0 THEN
+            RAISE_APPLICATION_ERROR(-20220, 'Contacto no encontrado');
+        END IF;
+    END;
+
+    BEGIN
+        SELECT COD_ESTADO INTO v_estado_resp FROM JRGY_CAT_ESTADO_CONTACTO WHERE UPPER(NOMBRE) = 'RESPONDIDO';
+    EXCEPTION
+        WHEN NO_DATA_FOUND THEN
+            RAISE_APPLICATION_ERROR(-20222, 'Estado RESPONDIDO no disponible');
+    END;
+
+    INSERT INTO JRGY_CONTACTO_RESPUESTA (
+        COD_CONTACTO, COD_EMPLEADO, MENSAJE, CANAL_ENVIADO, ES_PUBLICA, FECHA_RESPUESTA
+    ) VALUES (
+        p_id, p_empleado_id, p_mensaje, p_canal, CASE WHEN UPPER(NVL(p_es_publica,'Y')) = 'N' THEN 'N' ELSE 'Y' END, SYSDATE
+    );
+
+    UPDATE JRGY_CONTACTO
+        SET COD_ESTADO = v_estado_resp,
+            FECHA_RESPUESTA = SYSDATE,
+            COD_EMPLEADO_ASIGNADO = NVL(COD_EMPLEADO_ASIGNADO, p_empleado_id)
+        WHERE COD_CONTACTO = p_id;
+END;
+/
+
+PROMPT Modulo de contacto listo.

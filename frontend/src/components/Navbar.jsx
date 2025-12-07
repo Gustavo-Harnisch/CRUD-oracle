@@ -7,7 +7,6 @@ const NAV_VARIANTS = {
     { to: "/", label: "Inicio", end: true },
     { to: "/rooms", label: "Habitaciones" },
     { to: "/services", label: "Servicios y experiencias" },
-    { to: "/contact", label: "Contacto" },
   ],
   CUSTOMER: [
     { to: "/customer/dashboard", label: "Dashboard", end: true },
@@ -16,8 +15,7 @@ const NAV_VARIANTS = {
     { to: "/customer/booking-events", label: "Servicios de reserva" },
     { to: "/rooms", label: "Habitaciones" },
     { to: "/services", label: "Servicios y experiencias" },
-    { to: "/customer/profile", label: "Perfil" },
-    { to: "/contact", label: "Soporte" },
+    { to: "/customer/profile", label: "Perfil" }
   ],
   EMPLOYEE: [
     { to: "/employee/home", label: "Inicio", end: true },
@@ -27,8 +25,7 @@ const NAV_VARIANTS = {
     { to: "/employee/services", label: "Servicios" },
     { to: "/employee/requests", label: "Peticiones de huéspedes" },
     { to: "/employee/department", label: "Mi departamento" },
-    { to: "/admin/distributors", label: "Proveedores" },
-    { to: "/contact", label: "Comunicaciones" },
+    { to: "/admin/distributors", label: "Proveedores" }
   ],
   ADMIN: [
     { to: "/admin/home", label: "Inicio", end: true },
@@ -40,6 +37,7 @@ const NAV_VARIANTS = {
     { to: "/admin/employees", label: "Empleados" },
     { to: "/admin/departments", label: "Departamentos" },
     { to: "/admin/distributors", label: "Proveedores" },
+    { to: "/admin/reports", label: "Reportes" },
     // Auditoría/logs y solicitudes quedan fuera del menú hasta tener funcionalidad real.
   ],
 };
@@ -67,7 +65,7 @@ const Navbar = () => {
 
   const handleLogout = () => {
     logout();
-    navigate("/");
+    navigate("/", { replace: true });
   };
 
   const isItemActive = (to, end = false) => {

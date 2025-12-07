@@ -1,6 +1,7 @@
 Notas de procedimientos (referencia rápida)
 ==========================================
 Importante: evitar endpoints/SQL directo y usar exclusivamente procedimientos almacenados para todas las operaciones.
+Nota PK usuario: COD_USUARIO es RUT chileno sin DV ni puntos (ej. 12.345.678-0 se guarda como 12345678). No existe secuencia/trigger de autoincremento y los CRUD asumen que el RUT llega completo.
 
 Servicios (catálogo maestro)
 - JRGY_PRO_SERVICIO_LISTAR(p_include_inactive NUMBER, cur OUT SYS_REFCURSOR)
@@ -22,6 +23,12 @@ Reservas (cabecera)
   * p_es_admin=1 lista todas; 0 solo las del usuario.
 - JRGY_PRO_RESERVA_CREAR(p_user_id, p_hab_id, p_fecha_inicio, p_fecha_fin, p_huespedes, p_id OUT)
   * Valida capacidad y fechas; error -20090 capacidad excedida, -20091 habitación no encontrada.
+ - Flujo de estado esperado en frontend:
+   * CREADA (al crear la reserva).
+   * EN PROCESO (día de ingreso o con check-in registrado).
+   * ATRASADO (día de ingreso ya pasó y no hay check-in registrado).
+   * FINALIZADA (check-out registrado).
+   * CANCELADA se respeta desde backend.
 
 Servicios asociados a reserva
 - JRGY_PRO_RESERVA_SERVICIO_LISTAR(p_reserva_id, cur OUT)
@@ -31,6 +38,8 @@ Servicios asociados a reserva
   * Misma validación; error -20089 item no encontrado.
 - JRGY_PRO_RESERVA_SERVICIO_CANCELAR(p_item_id, p_reserva_id)
   * Marca cancelado y recalcula totales; error -20089 item no encontrado.
+ - Estados operativos esperados en frontend de empleados: Pendiente/Nuevo → En ejecución → Finalizado; para clientes: Creado → En cola → En ejecución → Listo (muestran progreso del servicio solicitado).
+ - Cada item puede mostrar productos del servicio (GET /services/:id/products) para saber insumos requeridos según TIPO (spa, exterior, etc.).
 
 Autenticación / usuarios / roles
 - JRGY_PRO_AUTH_LOGIN(p_email, cur OUT) -> devuelve usuario + hash para validar en app.
@@ -80,6 +89,16 @@ Empleados
 - JRGY_PRO_EMPLEADO_ACTUALIZAR(p_id, p_cargo, p_sueldo_base, p_fecha_contrato, p_dep_id, p_estado_nombre)
 - JRGY_PRO_EMPLEADO_BORRAR(p_id)
 
+Contacto (formularios y seguimiento)
+- Tablas sugeridas: JRGY_CAT_TIPO_CONTACTO, JRGY_CAT_ESTADO_CONTACTO, JRGY_CONTACTO (contacto público o de usuario; prioridad, canal_respuesta, asignación a empleado), JRGY_CONTACTO_RESPUESTA (respuestas públicas/internas).
+- JRGY_PRO_CONTACTO_CREAR(p_user_id, p_nombre, p_email, p_tel, p_tipo, p_asunto, p_mensaje, p_canal_respuesta, p_id OUT) -> estado inicial RECIBIDO, prioridad MEDIA.
+- JRGY_PRO_CONTACTO_LISTAR(p_es_admin NUMBER, p_empleado_id, p_user_id, p_estado, p_tipo, p_busqueda, cur OUT) -> admin todos; empleado ve asignados y sin asignar; user ve los suyos.
+- JRGY_PRO_CONTACTO_OBTENER(p_id, cur OUT) -> detalle + respuestas (ES_PUBLICA marca visibles para usuario).
+- JRGY_PRO_CONTACTO_ASIGNAR(p_id, p_empleado_id) -> mueve a EN_PROCESO.
+- JRGY_PRO_CONTACTO_CAMBIAR_ESTADO(p_id, p_estado, p_notas) -> al pasar a RESPONDIDO setea FECHA_RESPUESTA.
+- JRGY_PRO_CONTACTO_RESPONDER(p_id, p_empleado_id, p_mensaje, p_canal, p_es_publica) -> agrega respuesta y marca RESPONDIDO.
+- Roles: público crea; USER crea y consulta propios; EMPLOYEE/ADMIN listan, asignan, responden; ADMIN gestiona catálogos y reasigna.
+
 Faltante/pendiente por implementar
 - Ajustar procs de servicio para soportar minutos (hoy validan 0–23 enteros) y documentar nuevo formato.
 - Conectar UI admin para asociar productos a servicios (API ya expuesta /services/:id/products).
@@ -91,3 +110,9 @@ Solicitudes admin
 - JRGY_PRO_SOLICITUD_LISTAR(cur OUT)
 - JRGY_PRO_SOLICITUD_RESOLVER(p_id, p_accion, p_aprobador)
   * p_accion: 'approved' o 'rejected'; errores -20096 ya resuelta, -20097 no encontrada.
+
+Reportes (ingresos/egresos/balance)
+- JRGY_PRO_REPORTE_INGRESOS_RESERVAS(p_fecha_desde, p_fecha_hasta, cur OUT): suma reservas y servicios asociados por fecha.
+- JRGY_PRO_REPORTE_INGRESOS_VENTAS(p_fecha_desde, p_fecha_hasta, cur OUT): suma ventas de productos por fecha.
+- JRGY_PRO_REPORTE_EGRESOS_COMPRAS(p_fecha_desde, p_fecha_hasta, cur OUT): suma compras (detalle pedido) por fecha.
+- JRGY_PRO_REPORTE_BALANCE(p_fecha_desde, p_fecha_hasta, cur OUT): retorna ingresos_reservas, ingresos_ventas, egresos_compras y utilidad (ingresos - egresos).

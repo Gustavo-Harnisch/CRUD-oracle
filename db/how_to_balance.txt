@@ -37,3 +37,46 @@ Notas de diseño
 - Decidir política de costo para stock valorizado (último costo vs. promedio ponderado).
 - Pagos: si se quiere reflejar caja vs. devengado, agregar campos de fecha de pago real en compras y reservas. De momento usar fecha de pedido/venta/reserva.
 - Considerar timezone y cerrar periodos por día/mes en los procs.
+
+Comportamiento esperado por rol
+- ADMIN:
+  * Puede consultar, filtrar por fecha y exportar reportes de ingresos, egresos y balance.
+  * Ve detalle por categoría (reservas habitación, servicios en reserva, ventas de productos, compras a proveedores) y subtotales diarios/mensuales.
+  * Puede delegar lectura a EMPLOYEE marcando permiso en rol (configurable en backend).
+- EMPLOYEE:
+  * Solo lectura: ve ingresos y egresos para operar (stock, caja) pero no modifica catálogos financieros.
+  * No puede exportar datos sensibles si no tiene flag de permiso.
+- USER:
+  * Sin acceso a reportes; solo ve sus propias transacciones en sus flujos (no forma parte del balance global).
+
+Relación tablas → reportes
+- Ingresos:
+  * Habitación: JRGY_RESERVA (TOTAL_RESERVA, TOTAL_HAB) y JRGY_PAGO_HABITACION/DETALLE_PAGO_HABITACION para trazabilidad de cobros.
+  * Servicios en reserva: JRGY_RESERVA_SERVICIO (TOTAL_ITEM) vinculado a reserva; usar validaciones de horario/estado servicio.
+  * Ventas de productos: JRGY_VENTA + JRGY_DETALLE_VENTA, modo de pago en JRGY_PAGO_VENTA.
+  * Nota: evitar doble conteo; si se suman pagos, debe evitarse sumar también totales devengados en el mismo periodo (definir política).
+- Egresos:
+  * Compras: JRGY_PEDIDO + JRGY_DETALLE_PEDIDO (precio_compra*cantidad).
+  * Movimientos stock: JRGY_MOVIMIENTO_STOCK puede alimentar un reporte de valorización o ajustes (SALIDA/ENTRADA con motivo).
+
+Endpoints sugeridos (backend)
+- GET /api/reports/ingresos?desde=YYYY-MM-DD&hasta=YYYY-MM-DD -> llama a proc ingresos reservas + ingresos ventas; retorna lista por fecha + subtotales.
+- GET /api/reports/egresos?desde=YYYY-MM-DD&hasta=YYYY-MM-DD -> proc compras; opcional valorizado de stock si se agrega.
+- GET /api/reports/balance?desde=YYYY-MM-DD&hasta=YYYY-MM-DD -> proc balance; retorna ingresos_reservas, ingresos_ventas, egresos_compras, utilidad, desglose diario.
+- Autorización: require ADMIN; EMPLOYEE solo si el rol incluye permiso (hasRole + flag).
+
+Front (vista reportes)
+- Filtros de fecha (desde/hasta), botón exportar CSV.
+- Tarjetas resumen: Ingresos reservas, Ingresos ventas, Egresos compras, Utilidad.
+- Gráficos simples (línea/área) por día; tabla con desglose por origen (habitaciones/servicios/ventas vs compras).
+- Mensajes claros si no hay datos en rango.
+
+Pendientes para cerrar con código
+- Crear procs de reporte mencionados (si no existen) o documentar nombres finales en memoria_ia.txt.
+- Añadir rutas en backend (/api/reports/*) que consuman exclusivamente los procs.
+- Implementar página `/admin/reports` en frontend con UI anterior.
+- Decidir política de devengado vs pagado y reflejarla en los procs para evitar doble conteo.
+
+Implementado en código
+- Backend: rutas /api/reports/ingresos, /api/reports/egresos, /api/reports/balance con validación ADMIN/EMPLOYEE (ver backend/src/routes/reports.js).
+- Frontend: página `/admin/reports` accesible desde navbar admin, con filtros y tarjetas/tablas (ver frontend/src/pages/admin/AdminReports.jsx).

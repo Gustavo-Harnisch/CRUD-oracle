@@ -38,10 +38,19 @@ function normalizeRolesInput(input) {
   return [];
 }
 
+function validateRut(rut, { optional = false } = {}) {
+  const raw = String(rut ?? '').trim();
+  if (optional && raw === '') return;
+  if (!/^[0-9]{7,8}$/.test(raw)) {
+    throw new AppError('RUT inválido: use 7-8 dígitos sin DV', 422);
+  }
+}
+
 module.exports = {
   requireNonEmpty,
   validateEmail,
   validatePhone,
   validateRoles,
-  normalizeRolesInput
+  normalizeRolesInput,
+  validateRut
 };

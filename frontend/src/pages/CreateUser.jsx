@@ -13,9 +13,17 @@ const CreateUser = () => {
     setIsSubmitting(true);
     setError(null);
 
+    const rutDigits = (formData.rut || "").replace(/\D/g, "");
+    if (!rutDigits || rutDigits.length < 7 || rutDigits.length > 8) {
+      setError("RUT inválido. Usa 7-8 dígitos sin puntos ni DV.");
+      setIsSubmitting(false);
+      return;
+    }
+
     try {
       const payload = {
         ...formData,
+        codUsuario: rutDigits,
         roles: formData.role ? [String(formData.role).toUpperCase()] : ["USER"],
       };
       await createUser(payload);

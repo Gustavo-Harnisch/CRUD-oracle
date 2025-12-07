@@ -37,6 +37,12 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  const resetAuthState = () => {
+    setToken(null);
+    setUser(null);
+    clearStoredAuth();
+  };
+
   useEffect(() => {
     const stored = loadStoredAuth();
     if (stored?.token) {
@@ -47,6 +53,7 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const login = async ({ email, password }) => {
+    resetAuthState();
     const { data } = await loginRequest({ email, password });
     const roles = Array.isArray(data?.user?.roles) ? data.user.roles : (data?.user?.role ? [data.user.role] : []);
     const normalizedUser = data?.user ? { ...data.user, roles } : null;
@@ -62,20 +69,23 @@ export const AuthProvider = ({ children }) => {
 
   const logout = () => {
     // Opcional: podrías llamar al backend /api/auth/logout aquí si quieres revocar el token.
-    setToken(null);
-    setUser(null);
-    clearStoredAuth();
+    resetAuthState();
   };
 
   const register = async (payload) => {
+    resetAuthState();
     // Aseguramos rol por defecto USER y normalizamos mayúsculas
     const defaultRole = "USER";
     const roleFromPayload =
       payload?.role || (Array.isArray(payload?.roles) ? payload.roles[0] : null) || defaultRole;
     const normalizedRole = String(roleFromPayload).toUpperCase();
+    const rutDigits = String(payload?.codUsuario ?? payload?.rut ?? "")
+      .replace(/\D/g, "")
+      .slice(0, 9); // limitar longitud defensiva
 
     const { data } = await registerRequest({
       ...payload,
+      codUsuario: rutDigits || undefined,
       role: normalizedRole,
     });
     const rolesArr = Array.isArray(data?.user?.roles)

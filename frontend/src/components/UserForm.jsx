@@ -3,6 +3,7 @@ import FormField from "./FormField";
 import PasswordField from "./PasswordField";
 
 const defaultValues = {
+  rut: "",
   name: "",
   apellido1: "",
   apellido2: "",
@@ -23,6 +24,7 @@ const UserForm = memo(
     includePassword = true,
     passwordOptional = false,
     phoneRequired = false,
+    rutDisabled = false,
   }) => {
     const [formData, setFormData] = useState({ ...defaultValues, ...initialValues });
 
@@ -45,6 +47,20 @@ const UserForm = memo(
 
     return (
       <form onSubmit={handleSubmit} className="card card-body" style={{ maxWidth: "600px" }}>
+        <FormField
+          id="rut"
+          name="rut"
+          label="RUT (sin DV ni puntos)"
+          type="text"
+          inputMode="numeric"
+          pattern="[0-9]{7,8}"
+          value={formData.rut}
+          onChange={handleChange}
+          required
+          disabled={rutDisabled}
+          placeholder="Ej: 12345678"
+        />
+
         <FormField
           id="name"
           name="name"

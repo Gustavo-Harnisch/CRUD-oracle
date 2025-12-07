@@ -9,7 +9,8 @@ const {
   validateEmail,
   validatePhone,
   normalizeRolesInput,
-  validateRoles
+  validateRoles,
+  validateRut
 } = require('../utils/validators');
 const {
   fetchUserRoles,
@@ -18,6 +19,7 @@ const {
   fetchUserWithRoles
 } = require('../services/userService');
 const { extractToken, requireUserFromToken } = require('../services/authService');
+const { firstOutValue } = require('../utils/oracle');
 
 const router = express.Router();
 
@@ -71,6 +73,7 @@ router.post(
   '/auth/register',
   asyncHandler(async (req, res) => {
     const data = req.body || {};
+    const codUsuario = data.codUsuario ?? data.rut ?? data.RUT;
     const name = String(data.name || '').trim();
     const apellido1 = String(data.apellido1 || '').trim();
     const apellido2 = String(data.apellido2 || '').trim();
@@ -81,6 +84,7 @@ router.post(
     const roles = normalizeRolesInput(roleInput);
     const roleNames = roles.length ? roles : ['USER'];
 
+    validateRut(codUsuario);
     requireNonEmpty(name, 'nombre');
     requireNonEmpty(apellido1, 'apellido1');
     requireNonEmpty(email, 'correo');
@@ -97,8 +101,9 @@ router.post(
       try {
         const rolesJson = JSON.stringify(roleNames);
         const result = await conn.execute(
-          `BEGIN JRGY_PRO_USUARIO_CREAR(:name, :ap1, :ap2, :tel, :email, :passwordHash, :rolesJson, :id); END;`,
+          `BEGIN JRGY_PRO_USUARIO_CREAR(:codUsuario, :name, :ap1, :ap2, :tel, :email, :passwordHash, :rolesJson, :id); END;`,
           {
+            codUsuario: Number(codUsuario),
             name,
             ap1: apellido1,
             ap2: apellido2 || null,
@@ -111,7 +116,7 @@ router.post(
           { autoCommit: true }
         );
 
-        const newId = result.outBinds.id[0];
+        const newId = firstOutValue(result.outBinds.id);
         const user = await fetchUserWithRoles(conn, newId);
         const token = await generateToken(conn, newId);
         res.status(201).json({ token, user });

@@ -34,18 +34,12 @@ const navCards = [
     href: "/customer/profile",
     variant: "outline-secondary",
   },
-  {
-    title: "Soporte rápido",
-    text: "Escríbenos dudas o coordina cambios con el equipo.",
-    href: "/contact",
-    variant: "outline-secondary",
-  },
 ];
 
 const helpLinks = [
   { label: "Guía rápida: reservar en 3 pasos", href: "/customer/reservations" },
   { label: "Cómo agregar servicios a una reserva", href: "/customer/booking-events" },
-  { label: "Políticas y contacto directo", href: "/contact" },
+  { label: "Políticas de reserva", href: "/customer/bookings" },
 ];
 
 const CustomerDashboard = () => {
@@ -96,7 +90,7 @@ const CustomerDashboard = () => {
         <div>
           <p className="text-uppercase text-muted small mb-1">Accesos rápidos</p>
           <h2 className="h5 mb-0">Todo lo que necesitas a un clic</h2>
-          <p className="text-muted small mb-0">Reservas, servicios, eventos y contacto agrupados.</p>
+          <p className="text-muted small mb-0">Reservas, servicios y eventos agrupados.</p>
         </div>
       </div>
 
@@ -156,9 +150,6 @@ const CustomerDashboard = () => {
                 </a>
                 <a className="btn btn-outline-secondary btn-sm" href="/customer/profile">
                   Ajustar mi perfil
-                </a>
-                <a className="btn btn-outline-secondary btn-sm" href="/contact">
-                  Hablar con el equipo
                 </a>
               </div>
             </div>

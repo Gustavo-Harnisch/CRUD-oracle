@@ -34,6 +34,7 @@ Proyecto práctico que implementa un CRUD con **React (Vite)** en el frontend y 
 ### Base de Datos
 - Oracle XE (o Standard/Enterprise)
 - Cliente Oracle: Instant Client (requerido por `node-oracledb`)
+- `COD_USUARIO` usa RUT chileno sin dígito verificador ni puntos (ej. 12.345.678-0 -> 12345678), sin secuencia/trigger de autoincremento.
 
 ---
 

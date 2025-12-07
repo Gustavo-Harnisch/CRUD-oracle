@@ -12,9 +12,30 @@ async function bootstrap() {
 
   const app = express();
 
+  const explicitOrigins = (config.corsOrigin || '')
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean);
+  const localFallbackOrigins = [
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    'http://localhost:4173',
+    'http://127.0.0.1:4173'
+  ];
+  const allowedOrigins = explicitOrigins.length ? explicitOrigins : localFallbackOrigins;
+
+  const isLocalNetwork = (origin = '') =>
+    /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin) ||
+    /^https?:\/\/(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[01]))/.test(origin);
+
   app.use(
     cors({
-      origin: config.corsOrigin,
+      origin(origin, callback) {
+        if (!origin) return callback(null, true); // peticiones sin header Origin (por ejemplo, curl)
+        if (allowedOrigins.includes(origin)) return callback(null, true);
+        if (isLocalNetwork(origin)) return callback(null, true);
+        return callback(new Error(`CORS bloqueado para origen: ${origin}`));
+      },
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
       allowedHeaders: ['Content-Type', 'Authorization'],
       credentials: true

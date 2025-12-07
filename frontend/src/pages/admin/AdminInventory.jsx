@@ -33,6 +33,25 @@ const AdminInventory = () => {
   });
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
+  const typeOptions = useMemo(() => {
+    const seen = new Set();
+    const list = [];
+    products.forEach((p) => {
+      const name = (p.tipo || "").trim();
+      if (name && !seen.has(name)) {
+        seen.add(name);
+        list.push(name);
+      }
+    });
+    [form.tipo, filters.tipo].forEach((name) => {
+      const n = (name || "").trim();
+      if (n && !seen.has(n)) {
+        seen.add(n);
+        list.push(n);
+      }
+    });
+    return list;
+  }, [products, form.tipo, filters.tipo]);
 
   const load = async () => {
     setLoading(true);
@@ -160,13 +179,22 @@ const AdminInventory = () => {
                   />
                 </div>
                 <div className="col-md-6">
-                  <label className="form-label">Tipo</label>
-                  <input
-                    type="text"
-                    className="form-control"
+                  <label className="form-label">Categoría</label>
+                  <select
+                    className="form-select"
                     value={form.tipo}
                     onChange={(e) => setForm((p) => ({ ...p, tipo: e.target.value }))}
-                  />
+                  >
+                    <option value="">Selecciona</option>
+                    {typeOptions.map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                    {form.tipo && !typeOptions.includes(form.tipo) && (
+                      <option value={form.tipo}>{form.tipo}</option>
+                    )}
+                  </select>
                 </div>
                 <div className="col-md-6">
                   <label className="form-label">Precio</label>
@@ -258,14 +286,19 @@ const AdminInventory = () => {
                   />
                 </div>
                 <div className="col-6 col-lg-2">
-                  <label className="form-label small text-muted mb-1">Tipo</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    placeholder="amenity"
+                  <label className="form-label small text-muted mb-1">Categoría</label>
+                  <select
+                    className="form-select"
                     value={filters.tipo}
                     onChange={(e) => setFilters((p) => ({ ...p, tipo: e.target.value }))}
-                  />
+                  >
+                    <option value="">Todas</option>
+                    {typeOptions.map((t) => (
+                      <option key={`f-${t}`} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div className="col-6 col-lg-2">
                   <label className="form-label small text-muted mb-1">Estado</label>

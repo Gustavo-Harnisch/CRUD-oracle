@@ -2,12 +2,24 @@
 const statusBadge = (status = "") => {
   const normalized = status.toLowerCase();
   if (normalized === "confirmada") return "badge bg-success-subtle text-success border";
+  if (normalized.includes("checkout") && normalized.includes("solic"))
+    return "badge bg-info-subtle text-info border";
   if (normalized === "finalizada") return "badge bg-primary-subtle text-primary border";
   if (normalized === "cancelada") return "badge bg-danger-subtle text-danger border";
   return "badge bg-warning-subtle text-warning border";
 };
 
-const BookingDetailCard = ({ booking, events = [], onClose }) => {
+const BookingDetailCard = ({
+  booking,
+  events = [],
+  onClose,
+  onCancel,
+  canCancel = false,
+  canceling = false,
+  onRequestCheckout,
+  canRequestCheckout = false,
+  requestingCheckout = false,
+}) => {
   if (!booking) return null;
 
   const totalHabitacion = booking.totalHabitacion ?? booking.total_habitacion;
@@ -35,6 +47,26 @@ const BookingDetailCard = ({ booking, events = [], onClose }) => {
           </div>
           <div className="d-flex align-items-center gap-2">
             <span className={statusBadge(booking.status)}>{booking.status}</span>
+            {canRequestCheckout && onRequestCheckout && (
+              <button
+                type="button"
+                className="btn btn-outline-primary btn-sm"
+                onClick={onRequestCheckout}
+                disabled={requestingCheckout}
+              >
+                {requestingCheckout ? "Solicitando..." : "Solicitar check-out"}
+              </button>
+            )}
+            {canCancel && onCancel && (
+              <button
+                type="button"
+                className="btn btn-outline-danger btn-sm"
+                onClick={onCancel}
+                disabled={canceling}
+              >
+                {canceling ? "Cancelando..." : "Cancelar reserva"}
+              </button>
+            )}
             {onClose && (
               <button type="button" className="btn btn-outline-secondary btn-sm" onClick={onClose}>
                 Cerrar

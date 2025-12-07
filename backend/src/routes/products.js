@@ -4,6 +4,7 @@ const { asyncHandler, AppError } = require('../utils/errors');
 const { withConnection } = require('../db');
 const { extractToken, requireUserFromToken } = require('../services/authService');
 const { hasRole } = require('../utils/authz');
+const { firstOutValue } = require('../utils/oracle');
 
 const router = express.Router();
 
@@ -71,7 +72,7 @@ router.post(
         { autoCommit: true }
       );
 
-      const newId = result.outBinds.id[0];
+      const newId = firstOutValue(result.outBinds.id);
       const resList = await conn.execute(
         `BEGIN JRGY_PRO_PRODUCTO_LISTAR(:cur); END;`,
         { cur: { dir: oracledb.BIND_OUT, type: oracledb.CURSOR } }

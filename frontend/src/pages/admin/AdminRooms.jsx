@@ -4,7 +4,8 @@ import {
   createRoom,
   updateRoom,
   deleteRoom,
-  changeRoomStatus,
+  fetchRoomTypes,
+  createRoomType,
 } from "../../services/roomService";
 import { useAuth } from "../../context/AuthContext";
 
@@ -13,7 +14,7 @@ const emptyForm = {
   tipo: "",
   capacidad: 1,
   precioBase: 0,
-  estado: "ACTIVO",
+  estado: "LIBRE",
 };
 
 const AdminRooms = () => {
@@ -22,6 +23,10 @@ const AdminRooms = () => {
   const isAdmin = isAuthenticated && roles.includes("ADMIN");
   const canManage = isAdmin;
   const [rooms, setRooms] = useState([]);
+  const [roomTypes, setRoomTypes] = useState([]);
+  const [typesLoading, setTypesLoading] = useState(true);
+  const [typesError, setTypesError] = useState("");
+  const [creatingType, setCreatingType] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -35,10 +40,42 @@ const AdminRooms = () => {
     maxPrice: "",
     minCap: "",
   });
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+
+  const deriveTypesFromRooms = (list = []) => {
+    const seen = new Set();
+    return list
+      .map((r) => String(r?.tipo || "").trim().toUpperCase())
+      .filter((name) => {
+        if (!name || seen.has(name)) return false;
+        seen.add(name);
+        return true;
+      })
+      .map((name) => ({ id: `room-${name}`, nombre: name, tipo: name }));
+  };
 
   useEffect(() => {
     load();
+    loadRoomTypes();
   }, []);
+
+  const loadRoomTypes = async () => {
+    setTypesError("");
+    setTypesLoading(true);
+    try {
+      const data = await fetchRoomTypes();
+      setRoomTypes(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error(err);
+      const serverMessage = err?.response?.data?.message;
+      if (rooms.length > 0) {
+        setRoomTypes(deriveTypesFromRooms(rooms));
+      }
+      setTypesError(serverMessage || "No se pudieron cargar los tipos de habitación.");
+    } finally {
+      setTypesLoading(false);
+    }
+  };
 
   const load = async () => {
     setError("");
@@ -46,6 +83,7 @@ const AdminRooms = () => {
     try {
       const data = await fetchRooms();
       setRooms(data);
+      setRoomTypes((prev) => (prev.length > 0 ? prev : deriveTypesFromRooms(data)));
     } catch (err) {
       console.error(err);
       const status = err?.response?.status;
@@ -69,6 +107,8 @@ const AdminRooms = () => {
         numero: Number(form.numero),
         capacidad: Number(form.capacidad),
         precioBase: Number(form.precioBase),
+        tipo: String(form.tipo || "").trim().toUpperCase(),
+        estado: String(form.estado || "").trim().toUpperCase(),
       };
       if (editingId) {
         await updateRoom(editingId, payload);
@@ -98,7 +138,7 @@ const AdminRooms = () => {
     setEditingId(room.id);
     setForm({
       numero: room.numero,
-      tipo: room.tipo || "",
+      tipo: (room.tipo || "").toUpperCase(),
       capacidad: room.capacidad || 1,
       precioBase: room.precioBase || 0,
       estado: (room.estado || "ACTIVO").toUpperCase(),
@@ -106,11 +146,11 @@ const AdminRooms = () => {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm("¿Eliminar esta habitación?")) return;
     setError("");
     try {
       await deleteRoom(id);
       await load();
+      setConfirmDeleteId(null);
     } catch (err) {
       console.error(err);
       const status = err?.response?.status;
@@ -125,24 +165,95 @@ const AdminRooms = () => {
     }
   };
 
-  const handleToggleEstado = async (room) => {
-    const nextEstado = (room.estado || "ACTIVO").toUpperCase() === "ACTIVO" ? "INACTIVO" : "ACTIVO";
+  const handleDeleteClick = (id) => {
+    if (confirmDeleteId === id) {
+      handleDelete(id);
+    } else {
+      setConfirmDeleteId(id);
+      setTimeout(() => {
+        setConfirmDeleteId((current) => (current === id ? null : current));
+      }, 4000);
+    }
+  };
+
+  const handleAddType = async () => {
+    if (!canManage) return;
+    const previous = form.tipo;
+    const input = window.prompt("Nombre del nuevo tipo de habitación (se guardará en mayúsculas):");
+    if (input === null) return;
+    const normalized = (input || "").trim().toUpperCase();
+    if (!normalized) return;
+
+    setCreatingType(true);
     setError("");
+    setTypesError("");
     try {
-      await changeRoomStatus(room.id, nextEstado);
-      await load();
+      const created = await createRoomType(normalized);
+      await loadRoomTypes();
+      const nextValue = created?.nombre || created?.tipo || normalized;
+      setForm((p) => ({ ...p, tipo: nextValue }));
     } catch (err) {
       console.error(err);
       const status = err?.response?.status;
       if (status === 401) {
         setError("Sesión expirada o sin permisos admin. Inicia sesión nuevamente.");
+        setTypesError("Sesión expirada o sin permisos admin. Inicia sesión nuevamente.");
         logout();
         window.location.href = "/login";
+      } else if (status === 409) {
+        setError("El tipo ya existe. Selecciónalo en la lista.");
+        setTypesError("El tipo ya existe. Selecciónalo en la lista.");
+        await loadRoomTypes();
+        setForm((p) => ({ ...p, tipo: normalized }));
       } else {
-        const message = err?.response?.data?.message || "No se pudo cambiar el estado.";
+        const message = err?.response?.data?.message || "No se pudo crear el tipo.";
         setError(message);
+        setTypesError(message);
+        setForm((p) => ({ ...p, tipo: previous }));
       }
+    } finally {
+      setCreatingType(false);
     }
+  };
+
+  const handleTypeChange = async (value) => {
+    if (value === "__add__") {
+      await handleAddType();
+      return;
+    }
+    setForm((p) => ({ ...p, tipo: value }));
+  };
+
+  const typeOptions = useMemo(() => {
+    const base = Array.isArray(roomTypes) ? roomTypes : [];
+    const seen = new Set();
+    const list = [];
+
+    base.forEach((t) => {
+      const name = (t?.nombre || t?.tipo || "").toUpperCase();
+      if (name && !seen.has(name)) {
+        seen.add(name);
+        list.push({ id: t?.id ?? name, nombre: name, tipo: name });
+      }
+    });
+
+    [form.tipo, filters.tipo].forEach((name) => {
+      const upper = (name || "").toUpperCase();
+      if (upper && !seen.has(upper)) {
+        seen.add(upper);
+        list.push({ id: `local-${upper}`, nombre: upper, tipo: upper });
+      }
+    });
+
+    return list;
+  }, [roomTypes, form.tipo, filters.tipo]);
+
+  const formatEstado = (estado) => {
+    const up = (estado || "").toUpperCase();
+    if (up === "LIBRE") return "ACTIVADA";
+    if (up === "OCUPADA") return "OCUPADA";
+    if (up === "MANTENCION") return "MANTENCION";
+    return up || "N/D";
   };
 
   const filtered = useMemo(() => {
@@ -153,8 +264,8 @@ const AdminRooms = () => {
       const searchMatch = filters.search
         ? `${r.numero} ${r.tipo || ""}`.toLowerCase().includes(filters.search.toLowerCase())
         : true;
-      const tipoMatch = filters.tipo ? (r.tipo || "").toLowerCase() === filters.tipo.toLowerCase() : true;
-      const estadoMatch = filters.estado ? (r.estado || "").toLowerCase() === filters.estado.toLowerCase() : true;
+      const tipoMatch = filters.tipo ? (r.tipo || "").toUpperCase() === filters.tipo.toUpperCase() : true;
+      const estadoMatch = filters.estado ? (r.estado || "").toUpperCase() === filters.estado.toUpperCase() : true;
       const minP = minPrice !== null ? Number(r.precioBase || 0) >= minPrice : true;
       const maxP = maxPrice !== null ? Number(r.precioBase || 0) <= maxPrice : true;
       const minC = minCap !== null ? Number(r.capacidad || 0) >= minCap : true;
@@ -202,18 +313,59 @@ const AdminRooms = () => {
                     disabled={!canManage}
                   />
                 </div>
-                <div className="col-md-6">
+                <div className="col-12">
                   <label className="form-label">Tipo</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    value={form.tipo}
-                    onChange={(e) => setForm((p) => ({ ...p, tipo: e.target.value }))}
-                    required
-                    disabled={!canManage}
-                  />
+                  <div className="d-flex flex-wrap align-items-stretch gap-2">
+                    <select
+                      className="form-select flex-grow-1"
+                      style={{ minWidth: "200px" }}
+                      value={form.tipo}
+                      onChange={(e) => handleTypeChange(e.target.value)}
+                      required
+                      disabled={!canManage || typesLoading || creatingType}
+                    >
+                      <option value="">{typesLoading ? "Cargando..." : "Selecciona un tipo"}</option>
+                      {typeOptions.map((t) => {
+                        const value = t.nombre || t.tipo || "";
+                        return (
+                          <option key={t.id || value} value={value}>
+                            {value}
+                          </option>
+                        );
+                      })}
+                      <option value="__add__">+ Agregar nuevo tipo...</option>
+                    </select>
+                    <button
+                      type="button"
+                      className="btn btn-outline-secondary flex-shrink-0"
+                      style={{ minWidth: "120px" }}
+                      onClick={handleAddType}
+                      disabled={!canManage || creatingType}
+                    >
+                      {creatingType ? "Guardando..." : "Agregar"}
+                    </button>
+                  </div>
+                  <div className="d-flex flex-wrap justify-content-between align-items-center mt-1">
+                    <div className="form-text mb-0">
+                      {typesLoading && <span className="text-muted">Cargando tipos...</span>}
+                      {typesError && <span className="text-danger">{typesError}</span>}
+                      {!typesLoading && !typesError && (
+                        <span className="text-muted">Usa la lista o agrega uno nuevo (se almacena en MAYÚSCULAS).</span>
+                      )}
+                    </div>
+                    {!typesLoading && (
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-link p-0 ms-auto"
+                        onClick={loadRoomTypes}
+                        disabled={creatingType}
+                      >
+                        Recargar tipos
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <div className="col-md-6">
+                <div className="col-md-6 col-lg-6">
                   <label className="form-label">Capacidad</label>
                   <input
                     type="number"
@@ -225,7 +377,7 @@ const AdminRooms = () => {
                     disabled={!canManage}
                   />
                 </div>
-                <div className="col-md-6">
+                <div className="col-md-6 col-lg-6">
                   <label className="form-label">Precio base</label>
                   <input
                     type="number"
@@ -237,7 +389,7 @@ const AdminRooms = () => {
                     disabled={!canManage}
                   />
                 </div>
-                <div className="col-md-6">
+                <div className="col-md-6 col-lg-6">
                   <label className="form-label">Estado</label>
                   <select
                     className="form-select"
@@ -245,13 +397,13 @@ const AdminRooms = () => {
                     onChange={(e) => setForm((p) => ({ ...p, estado: e.target.value }))}
                     disabled={!canManage}
                   >
-                    <option value="ACTIVO">Activo</option>
-                    <option value="INACTIVO">Inactivo</option>
+                    <option value="LIBRE">Activada</option>
+                    <option value="OCUPADA">Ocupada</option>
                     <option value="MANTENCION">Mantención</option>
                   </select>
                 </div>
                 <div className="col-12 d-flex gap-2">
-                  <button className="btn btn-primary" type="submit" disabled={saving || !canManage}>
+                  <button className="btn btn-primary" type="submit" disabled={saving || creatingType || !canManage}>
                     {saving ? "Guardando..." : editingId ? "Actualizar" : "Crear"}
                   </button>
                   {editingId && (
@@ -262,7 +414,7 @@ const AdminRooms = () => {
                         setEditingId(null);
                         setForm(emptyForm);
                       }}
-                      disabled={saving || !canManage}
+                      disabled={saving || creatingType || !canManage}
                     >
                       Cancelar edición
                     </button>
@@ -310,13 +462,22 @@ const AdminRooms = () => {
                 </div>
                 <div className="col-6 col-lg-2">
                   <label className="form-label small text-muted mb-1">Tipo</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    placeholder="Ej: simple"
+                  <select
+                    className="form-select"
                     value={filters.tipo}
                     onChange={(e) => setFilters((p) => ({ ...p, tipo: e.target.value }))}
-                  />
+                    disabled={typesLoading && typeOptions.length === 0}
+                  >
+                    <option value="">Todos</option>
+                    {typeOptions.map((t) => {
+                      const value = t.nombre || t.tipo || "";
+                      return (
+                        <option key={`filter-${t.id || value}`} value={value}>
+                          {value}
+                        </option>
+                      );
+                    })}
+                  </select>
                 </div>
                 <div className="col-6 col-lg-2">
                   <label className="form-label small text-muted mb-1">Estado</label>
@@ -326,8 +487,8 @@ const AdminRooms = () => {
                     onChange={(e) => setFilters((p) => ({ ...p, estado: e.target.value }))}
                   >
                     <option value="">Todos</option>
-                    <option value="ACTIVO">Activo</option>
-                    <option value="INACTIVO">Inactivo</option>
+                    <option value="LIBRE">Activada</option>
+                    <option value="OCUPADA">Ocupada</option>
                     <option value="MANTENCION">Mantención</option>
                   </select>
                 </div>
@@ -393,12 +554,15 @@ const AdminRooms = () => {
                           <td className="py-3">
                             <span
                               className={
-                                (room.estado || "").toUpperCase() === "ACTIVO"
-                                  ? "badge bg-success-subtle text-success border"
-                                  : "badge bg-secondary-subtle text-secondary border"
+                                (() => {
+                                  const est = (room.estado || "").toUpperCase();
+                                  if (est === "OCUPADA") return "badge bg-danger-subtle text-danger border";
+                                  if (est === "MANTENCION") return "badge bg-warning-subtle text-warning border";
+                                  return "badge bg-success-subtle text-success border";
+                                })()
                               }
                             >
-                              {room.estado || "N/D"}
+                              {formatEstado(room.estado)}
                             </span>
                           </td>
                           <td className="text-end py-3">
@@ -411,18 +575,11 @@ const AdminRooms = () => {
                                 Editar
                               </button>
                               <button
-                                className="btn btn-outline-secondary"
-                                onClick={() => handleToggleEstado(room)}
+                                className={`btn ${confirmDeleteId === room.id ? "btn-danger" : "btn-outline-danger"}`}
+                                onClick={() => handleDeleteClick(room.id)}
                                 disabled={!canManage}
                               >
-                                {(room.estado || "").toUpperCase() === "ACTIVO" ? "Inactivar" : "Activar"}
-                              </button>
-                              <button
-                                className="btn btn-outline-danger"
-                                onClick={() => handleDelete(room.id)}
-                                disabled={!canManage}
-                              >
-                                Eliminar
+                                {confirmDeleteId === room.id ? "¿Seguro?" : "Eliminar"}
                               </button>
                             </div>
                           </td>

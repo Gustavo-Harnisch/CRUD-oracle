@@ -1,6 +1,6 @@
 // src/pages/customer/CustomerReservation.jsx
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { fetchRooms } from "../../services/roomService";
 import { createReservation } from "../../services/bookingService";
 
@@ -12,6 +12,8 @@ const parseDateInput = (value) => {
 
 const CustomerReservation = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const preselectedRoomId = searchParams.get("room");
   const [rooms, setRooms] = useState([]);
   const [roomId, setRoomId] = useState("");
   const [startDate, setStartDate] = useState("");
@@ -28,7 +30,8 @@ const CustomerReservation = () => {
       try {
         const data = await fetchRooms();
         setRooms(data);
-        setRoomId(data[0]?.id || "");
+        const match = preselectedRoomId && data.find((r) => String(r.id) === String(preselectedRoomId));
+        setRoomId(match ? match.id : data[0]?.id || "");
       } catch (err) {
         console.error(err);
         setError("No se pudieron cargar las habitaciones.");
@@ -37,7 +40,7 @@ const CustomerReservation = () => {
       }
     };
     load();
-  }, []);
+  }, [preselectedRoomId]);
 
   const selectedRoom = useMemo(
     () => rooms.find((r) => String(r.id) === String(roomId)),

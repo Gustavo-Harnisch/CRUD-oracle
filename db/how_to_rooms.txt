@@ -4,6 +4,8 @@ Objetivo
 - Gestionar el catálogo de habitaciones (número, tipo, capacidad, precio base, estado) mediante procedimientos Oracle, sin SQL directo ni endpoints crudos.
 
 Procedimientos disponibles (ya implementados)
+- JRGY_PRO_TIPO_HAB_LISTAR(cur OUT): lista el catálogo de tipos de habitación (ordenados, en mayúsculas).
+- JRGY_PRO_TIPO_HAB_CREAR(p_nombre, p_id OUT): crea un tipo si no existe (UPPER/TRIM); devuelve el ID existente si ya está registrado.
 - JRGY_PRO_HABITACION_LISTAR(cur OUT): lista todas las habitaciones con tipo/estado descriptivo.
 - JRGY_PRO_HAB_OBTENER(p_id, cur OUT): devuelve una habitación.
 - JRGY_PRO_HAB_CREAR(p_numero, p_capacidad, p_precio_base, p_tipo_nombre, p_estado_nombre, p_id OUT)
@@ -31,5 +33,5 @@ Roles y permisos
 
 Notas
 - Estado usa catálogo JRGY_CAT_ESTADO_HABITACION (ej.: ACTIVO, INACTIVO, MANTENCION).
-- Tipo usa catálogo JRGY_CAT_TIPO_HABITACION (ej.: SIMPLE, MATRIMONIAL, CONFORT).
+- Tipo usa catálogo JRGY_CAT_TIPO_HABITACION (ej.: SIMPLE, MATRIMONIAL, CONFORT). Trigger TRG_CAT_TIPO_HAB_MAYUS fuerza mayúsculas, constraint única evita duplicados.
 - Precio base es por noche y se usa en reservas; cambios posteriores no re-calculan reservas ya cerradas.

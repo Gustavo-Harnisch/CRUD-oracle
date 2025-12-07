@@ -7,6 +7,106 @@ const { hasRole } = require('../utils/authz');
 
 const router = express.Router();
 
+const SQL_EMPLOYEE_LIST = `
+  WITH EMP AS (
+    SELECT e.COD_EMPLEADO,
+           e.COD_USUARIO,
+           u.NOMBRE_USUARIO || ' ' || NVL(u.APELLIDO1_USUARIO, '') || ' ' || NVL(u.APELLIDO2_USUARIO, '') AS NOMBRE_COMPLETO,
+           u.EMAIL_USUARIO AS EMAIL,
+           e.COD_DEPARTAMENTO,
+           'NONE' AS DEPARTAMENTO,
+           e.CARGO,
+           e.SALARIO AS SUELDO_BASE,
+           e.FECHA_CONTRATACION,
+           e.COD_ESTADO_LABORAL,
+           el.ESTADO_LABORAL,
+           CASE
+             WHEN e.CARGO IS NULL OR e.SALARIO IS NULL OR e.COD_DEPARTAMENTO IS NULL OR e.COD_ESTADO_LABORAL IS NULL THEN 1
+             ELSE 0
+           END AS INCOMPLETO
+    FROM JRGY_EMPLEADO e
+    LEFT JOIN JRGY_USUARIO u ON u.COD_USUARIO = e.COD_USUARIO
+    LEFT JOIN JRGY_CAT_ESTADO_LABORAL el ON el.COD_ESTADO_LABORAL = e.COD_ESTADO_LABORAL
+  ), EMP_ROLE AS (
+    SELECT
+      NULL AS COD_EMPLEADO,
+      u.COD_USUARIO,
+      u.NOMBRE_USUARIO || ' ' || NVL(u.APELLIDO1_USUARIO, '') || ' ' || NVL(u.APELLIDO2_USUARIO, '') AS NOMBRE_COMPLETO,
+      u.EMAIL_USUARIO AS EMAIL,
+      NULL AS COD_DEPARTAMENTO,
+      'NONE' AS DEPARTAMENTO,
+      NULL AS CARGO,
+      NULL AS SUELDO_BASE,
+      NULL AS FECHA_CONTRATACION,
+      NULL AS COD_ESTADO_LABORAL,
+      NULL AS ESTADO_LABORAL,
+      1 AS INCOMPLETO
+    FROM JRGY_USUARIO u
+    INNER JOIN JRGY_USUARIO_ROL ur ON ur.COD_USUARIO = u.COD_USUARIO
+    INNER JOIN JRGY_ROL r ON r.COD_ROL = ur.COD_ROL
+    LEFT JOIN JRGY_EMPLEADO e ON e.COD_USUARIO = u.COD_USUARIO
+    WHERE UPPER(r.NOMBRE_ROL) = 'EMPLOYEE'
+      AND e.COD_EMPLEADO IS NULL
+  )
+  SELECT *
+  FROM (
+    SELECT * FROM EMP
+    UNION ALL
+    SELECT * FROM EMP_ROLE
+  )
+  ORDER BY COD_EMPLEADO NULLS LAST, COD_USUARIO
+`;
+
+const SQL_EMPLOYEE_LIST_NO_SALARY = `
+  WITH EMP AS (
+    SELECT e.COD_EMPLEADO,
+           e.COD_USUARIO,
+           u.NOMBRE_USUARIO || ' ' || NVL(u.APELLIDO1_USUARIO, '') || ' ' || NVL(u.APELLIDO2_USUARIO, '') AS NOMBRE_COMPLETO,
+           u.EMAIL_USUARIO AS EMAIL,
+           e.COD_DEPARTAMENTO,
+           'NONE' AS DEPARTAMENTO,
+           e.CARGO,
+           NULL AS SUELDO_BASE,
+           e.FECHA_CONTRATACION,
+           e.COD_ESTADO_LABORAL,
+           el.ESTADO_LABORAL,
+           CASE
+              WHEN e.CARGO IS NULL OR e.COD_DEPARTAMENTO IS NULL OR e.COD_ESTADO_LABORAL IS NULL THEN 1
+              ELSE 0
+            END AS INCOMPLETO
+    FROM JRGY_EMPLEADO e
+    LEFT JOIN JRGY_USUARIO u ON u.COD_USUARIO = e.COD_USUARIO
+    LEFT JOIN JRGY_CAT_ESTADO_LABORAL el ON el.COD_ESTADO_LABORAL = e.COD_ESTADO_LABORAL
+  ), EMP_ROLE AS (
+    SELECT
+      NULL AS COD_EMPLEADO,
+      u.COD_USUARIO,
+      u.NOMBRE_USUARIO || ' ' || NVL(u.APELLIDO1_USUARIO, '') || ' ' || NVL(u.APELLIDO2_USUARIO, '') AS NOMBRE_COMPLETO,
+      u.EMAIL_USUARIO AS EMAIL,
+      NULL AS COD_DEPARTAMENTO,
+      'NONE' AS DEPARTAMENTO,
+      NULL AS CARGO,
+      NULL AS SUELDO_BASE,
+      NULL AS FECHA_CONTRATACION,
+      NULL AS COD_ESTADO_LABORAL,
+      NULL AS ESTADO_LABORAL,
+      1 AS INCOMPLETO
+    FROM JRGY_USUARIO u
+    INNER JOIN JRGY_USUARIO_ROL ur ON ur.COD_USUARIO = u.COD_USUARIO
+    INNER JOIN JRGY_ROL r ON r.COD_ROL = ur.COD_ROL
+    LEFT JOIN JRGY_EMPLEADO e ON e.COD_USUARIO = u.COD_USUARIO
+    WHERE UPPER(r.NOMBRE_ROL) = 'EMPLOYEE'
+      AND e.COD_EMPLEADO IS NULL
+  )
+  SELECT *
+  FROM (
+    SELECT * FROM EMP
+    UNION ALL
+    SELECT * FROM EMP_ROLE
+  )
+  ORDER BY COD_EMPLEADO NULLS LAST, COD_USUARIO
+`;
+
 function mapEmployee(row) {
   if (!row || row.COD_EMPLEADO === undefined) return null;
   return {
@@ -19,7 +119,9 @@ function mapEmployee(row) {
     cargo: row.CARGO,
     sueldoBase: row.SUELDO_BASE,
     fechaContratacion: row.FECHA_CONTRATACION,
-    estadoLaboralId: row.COD_ESTADO_LABORAL
+    estadoLaboralId: row.COD_ESTADO_LABORAL,
+    estadoLaboral: row.ESTADO_LABORAL,
+    incompleto: row.INCOMPLETO === 1
   };
 }
 
@@ -31,14 +133,26 @@ router.get(
     if (!hasRole(user, ['ADMIN'])) throw new AppError('No autorizado', 403);
 
     const employees = await withConnection(async (conn) => {
-      const result = await conn.execute(
-        `BEGIN JRGY_PRO_EMPLEADO_LISTAR(:cur); END;`,
-        { cur: { dir: oracledb.BIND_OUT, type: oracledb.CURSOR } }
-      );
-      const cur = result.outBinds.cur;
-      const rows = (await cur.getRows()) || [];
-      await cur.close();
-      return rows.map(mapEmployee).filter(Boolean);
+      try {
+        const result = await conn.execute(
+          `BEGIN JRGY_PRO_EMPLEADO_LISTAR(:cur); END;`,
+          { cur: { dir: oracledb.BIND_OUT, type: oracledb.CURSOR } }
+        );
+        const cur = result.outBinds.cur;
+        const rows = (await cur.getRows()) || [];
+        await cur.close();
+        return rows.map(mapEmployee).filter(Boolean);
+      } catch (err) {
+        console.warn('Fallo JRGY_PRO_EMPLEADO_LISTAR, usando SELECT directo', err);
+        try {
+          const fallback = await conn.execute(SQL_EMPLOYEE_LIST);
+          return (fallback.rows || []).map(mapEmployee).filter(Boolean);
+        } catch (fallbackErr) {
+          console.warn('Fallo SELECT con SUELDO_BASE, usando variante sin sueldo', fallbackErr);
+          const fallback2 = await conn.execute(SQL_EMPLOYEE_LIST_NO_SALARY);
+          return (fallback2.rows || []).map(mapEmployee).filter(Boolean);
+        }
+      }
     });
 
     res.json(employees);

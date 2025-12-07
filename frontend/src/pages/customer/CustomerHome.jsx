@@ -27,8 +27,8 @@ const CustomerHome = () => {
         subtitle={subtitle}
         primaryLabel="Mis reservas"
         primaryHref="/customer/bookings"
-        secondaryLabel="Contacto rápido"
-        secondaryHref="/contact"
+        secondaryLabel="Servicios y extras"
+        secondaryHref="/services"
         overlayOpacity={0.55}
       />
 

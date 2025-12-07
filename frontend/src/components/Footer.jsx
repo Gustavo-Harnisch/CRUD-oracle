@@ -28,7 +28,6 @@ const Footer = () => {
               <a className="text-decoration-none text-white-50" href="/">Inicio</a>
               <a className="text-decoration-none text-white-50" href="/rooms">Habitaciones</a>
               <a className="text-decoration-none text-white-50" href="/services">Servicios</a>
-              <a className="text-decoration-none text-white-50" href="/contact">Contacto</a>
               <a className="text-decoration-none text-white-50 fw-semibold" href="/login">
                 Iniciar sesión
               </a>

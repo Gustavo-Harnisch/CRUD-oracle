@@ -39,6 +39,13 @@ Roles y permisos
 - EMPLOYEE: solo lectura si se expone; no modifica.
 - USER: ve servicios activos en la web pública y puede añadir a su reserva vía flujos de reserva (validado por procs de reserva-servicio).
 
+Servicios solicitados por clientes (tickets de reserva)
+- Los servicios asociados a una reserva permiten que el cliente solicite “tickets” que el empleado ve en el tablero de peticiones.
+- Flujo empleado: Pendiente/Nuevo → En ejecución → Finalizado. Flujo visible para el cliente: Creado → En cola → En ejecución → Listo.
+- Los tickets se alimentan de `/reservations/:id/services` y muestran a qué reserva/habitación/cliente pertenecen.
+- Cada servicio puede traer productos asociados (ruta `/services/:id/products`). Un ticket indica cuántos productos requiere; la categoría del servicio (TIPO: spa, exterior, etc.) ayuda a clasificar insumos.
+- Los empleados pueden reasignar/actualizar estado; el cliente ve el cambio de estado para saber si su servicio está en cola o ejecutándose.
+
 Notas
 - Orden controla prioridad visual: números bajos aparecen primero.
 - Destacado es un flag (Y/N) para destacar en UI pública.

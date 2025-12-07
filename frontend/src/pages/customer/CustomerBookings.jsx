@@ -7,15 +7,26 @@ import {
   fetchReservationServices,
   addReservationService,
   cancelReservationService,
+  cancelReservation,
+  requestCheckout,
 } from "../../services/bookingService";
 import { listServices } from "../../services/serviceService";
 
 const statusBadge = (status = "") => {
   const normalized = status.toLowerCase();
-  if (normalized === "confirmada") return "badge bg-success-subtle text-success border";
-  if (normalized === "finalizada") return "badge bg-primary-subtle text-primary border";
-  if (normalized === "cancelada") return "badge bg-danger-subtle text-danger border";
-  return "badge bg-warning-subtle text-warning border";
+  if (normalized.includes("final")) return "badge bg-success-subtle text-success border";
+  if (normalized.includes("checkout") && normalized.includes("solic")) return "badge bg-info-subtle text-info border";
+  if (normalized.includes("proceso")) return "badge bg-primary-subtle text-primary border";
+  if (normalized.includes("atras")) return "badge bg-danger-subtle text-danger border";
+  if (normalized.includes("cancel")) return "badge bg-secondary-subtle text-secondary border";
+  if (normalized.includes("cread")) return "badge bg-warning-subtle text-warning border";
+  return "badge bg-light text-muted border";
+};
+
+const parseDate = (value) => {
+  if (!value) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
 };
 
 const CustomerBookings = () => {
@@ -37,6 +48,23 @@ const CustomerBookings = () => {
   });
   const [loadingServices, setLoadingServices] = useState(false);
   const [savingService, setSavingService] = useState(false);
+  const [cancelingReservation, setCancelingReservation] = useState(false);
+  const [requestingCheckout, setRequestingCheckout] = useState(false);
+
+  const normalizeEventType = (tipo = "") => String(tipo).trim().toLowerCase();
+  const compactEventType = (tipo = "") => normalizeEventType(tipo).replace(/[\s_-]+/g, "");
+  const isCheckinEvent = (tipo = "") => {
+    const t = compactEventType(tipo);
+    return t === "checkin";
+  };
+  const isCheckoutEvent = (tipo = "") => {
+    const t = compactEventType(tipo);
+    return t === "checkout";
+  };
+  const isCheckoutRequestEvent = (tipo = "") => {
+    const t = normalizeEventType(tipo);
+    return (t.includes("check-out") || t.includes("check out") || t.includes("checkout")) && t.includes("solicit");
+  };
 
   useEffect(() => {
     if (servicesCatalog.length && !serviceForm.serviceId) {
@@ -49,25 +77,57 @@ const CustomerBookings = () => {
       setLoading(true);
       setError("");
       try {
-        const [resData, svcData] = await Promise.all([
-          fetchReservations(),
-          listServices(),
-        ]);
+        const [resData, svcData] = await Promise.all([fetchReservations(), listServices()]);
         setServicesCatalog(svcData);
         const data = resData;
-        setBookings(
-          data.map((b) => ({
-            ...b,
-            created: b.fechaInicio,
-            start: b.fechaInicio,
-            end: b.fechaFin,
-            roomType: b.tipo,
-            status: b.estado,
-            guests: b.huespedes,
-            totalHabitacion: b.totalHabitacion ?? b.total_habitacion,
-            totalServicios: b.totalServicios ?? b.total_servicios,
-          })),
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        const todayEnd = new Date();
+        todayEnd.setHours(23, 59, 59, 999);
+
+        const bookingsWithEvents = await Promise.all(
+          data.map(async (b) => {
+            let events = [];
+            try {
+              events = await fetchReservationEvents(b.id);
+            } catch (err) {
+              console.error("Error cargando eventos de reserva", b.id, err);
+            }
+
+            const hasCheckin = events.some((e) => isCheckinEvent(e.tipo));
+            const hasCheckout = events.some((e) => isCheckoutEvent(e.tipo));
+            const hasCheckoutRequest = events.some((e) => isCheckoutRequestEvent(e.tipo));
+            const startDate = parseDate(b.fechaInicio);
+            const endDate = parseDate(b.fechaFin);
+            const base = String(b.estado || "").toUpperCase();
+            let derivedStatus = base || "CREADA";
+            if (base.includes("CANCEL")) derivedStatus = "CANCELADA";
+            else if (hasCheckout) derivedStatus = "FINALIZADA";
+            else if (hasCheckoutRequest || base.includes("CHECKOUT")) derivedStatus = "CHECKOUT_SOLICITADO";
+            else if (hasCheckin) derivedStatus = "EN PROCESO";
+            else if (startDate && startDate < todayStart) derivedStatus = "ATRASADO";
+            else if (startDate && startDate <= todayEnd) derivedStatus = "EN PROCESO";
+            else derivedStatus = "CREADA";
+
+            return {
+              ...b,
+              created: b.fechaInicio,
+              start: b.fechaInicio,
+              end: b.fechaFin,
+              roomType: b.tipo,
+              status: derivedStatus,
+              guests: b.huespedes,
+              totalHabitacion: b.totalHabitacion ?? b.total_habitacion,
+              totalServicios: b.totalServicios ?? b.total_servicios,
+              hasCheckin,
+              hasCheckout,
+              hasCheckoutRequest,
+              events,
+            };
+          }),
         );
+
+        setBookings(bookingsWithEvents);
       } catch (err) {
         console.error(err);
         setError("No se pudieron cargar las reservas.");
@@ -135,25 +195,68 @@ const CustomerBookings = () => {
     ? bookings.find((b) => b.id === selectedBookingId)
     : null;
 
+  const canCancelBooking = !!selectedBooking && ["CREADA", "ATRASADO"].includes((selectedBooking.status || "").toUpperCase());
+
   const [selectedEvents, setSelectedEvents] = useState([]);
+  const hasCheckoutRequest =
+    selectedEvents.some((ev) => isCheckoutRequestEvent(ev.tipo)) || (selectedBooking?.hasCheckoutRequest ?? false);
+  const canRequestCheckout =
+    !!selectedBooking &&
+    ((selectedBooking.status || "").toUpperCase() === "EN PROCESO") &&
+    !selectedBooking.hasCheckout &&
+    !hasCheckoutRequest;
 
   const refreshBookingData = async () => {
     try {
       setLoadingServices(true);
       const data = await fetchReservations();
-      setBookings(
-        data.map((b) => ({
-          ...b,
-          created: b.fechaInicio,
-          start: b.fechaInicio,
-          end: b.fechaFin,
-          roomType: b.tipo,
-          status: b.estado,
-          guests: b.huespedes,
-          totalHabitacion: b.totalHabitacion ?? b.total_habitacion,
-          totalServicios: b.totalServicios ?? b.total_servicios,
-        })),
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const todayEnd = new Date();
+      todayEnd.setHours(23, 59, 59, 999);
+
+      const bookingsWithEvents = await Promise.all(
+        data.map(async (b) => {
+          let events = [];
+          try {
+            events = await fetchReservationEvents(b.id);
+          } catch (err) {
+            console.error("Error cargando eventos de reserva", b.id, err);
+          }
+
+          const hasCheckin = events.some((e) => isCheckinEvent(e.tipo));
+          const hasCheckout = events.some((e) => isCheckoutEvent(e.tipo));
+          const hasCheckoutRequest = events.some((e) => isCheckoutRequestEvent(e.tipo));
+          const startDate = parseDate(b.fechaInicio);
+          const base = String(b.estado || "").toUpperCase();
+          let derivedStatus = base || "CREADA";
+          if (base.includes("CANCEL")) derivedStatus = "CANCELADA";
+          else if (hasCheckout) derivedStatus = "FINALIZADA";
+          else if (hasCheckoutRequest || base.includes("CHECKOUT")) derivedStatus = "CHECKOUT_SOLICITADO";
+          else if (hasCheckin) derivedStatus = "EN PROCESO";
+          else if (startDate && startDate < todayStart) derivedStatus = "ATRASADO";
+          else if (startDate && startDate <= todayEnd) derivedStatus = "EN PROCESO";
+          else derivedStatus = "CREADA";
+
+          return {
+            ...b,
+            created: b.fechaInicio,
+            start: b.fechaInicio,
+            end: b.fechaFin,
+            roomType: b.tipo,
+            status: derivedStatus,
+            guests: b.huespedes,
+            totalHabitacion: b.totalHabitacion ?? b.total_habitacion,
+            totalServicios: b.totalServicios ?? b.total_servicios,
+            hasCheckin,
+            hasCheckout,
+            hasCheckoutRequest,
+            events,
+          };
+        }),
       );
+
+      setBookings(bookingsWithEvents);
     } catch (err) {
       console.error(err);
     } finally {
@@ -253,6 +356,51 @@ const CustomerBookings = () => {
       console.error(err);
       const message = err?.response?.data?.message || "No se pudo cancelar el servicio.";
       setError(message);
+    }
+  };
+
+  const handleCancelReservation = async () => {
+    if (!selectedBooking) return;
+    const normalizedStatus = (selectedBooking.status || "").toUpperCase();
+    if (!["CREADA", "ATRASADO"].includes(normalizedStatus)) {
+      setError("Solo puedes cancelar reservas en estado CREADA o ATRASADO.");
+      return;
+    }
+    if (!window.confirm("¿Cancelar esta reserva?")) return;
+    setCancelingReservation(true);
+    setError("");
+    try {
+      await cancelReservation(selectedBooking.id);
+      await reloadReservationServices(selectedBooking.id);
+      await refreshBookingData();
+    } catch (err) {
+      console.error(err);
+      const message = err?.response?.data?.message || "No se pudo cancelar la reserva.";
+      setError(message);
+    } finally {
+      setCancelingReservation(false);
+    }
+  };
+
+  const handleRequestCheckout = async () => {
+    if (!selectedBooking) return;
+    if (!canRequestCheckout) {
+      setError("Solo puedes solicitar check-out cuando la reserva está en proceso y sin check-out registrado.");
+      return;
+    }
+    if (!window.confirm("¿Solicitar check-out?")) return;
+    setRequestingCheckout(true);
+    setError("");
+    try {
+      await requestCheckout(selectedBooking.id);
+      await reloadReservationServices(selectedBooking.id);
+      await refreshBookingData();
+    } catch (err) {
+      console.error(err);
+      const message = err?.response?.data?.message || "No se pudo solicitar el check-out.";
+      setError(message);
+    } finally {
+      setRequestingCheckout(false);
     }
   };
 
@@ -373,6 +521,12 @@ const CustomerBookings = () => {
             booking={selectedBooking}
             events={selectedEvents}
             onClose={() => setSelectedBookingId(null)}
+            onCancel={handleCancelReservation}
+            canCancel={canCancelBooking}
+            canceling={cancelingReservation}
+            onRequestCheckout={handleRequestCheckout}
+            canRequestCheckout={canRequestCheckout}
+            requestingCheckout={requestingCheckout}
           />
 
           <div className="row g-3 mt-2">

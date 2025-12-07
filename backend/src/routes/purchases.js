@@ -4,6 +4,7 @@ const { asyncHandler, AppError } = require('../utils/errors');
 const { withConnection } = require('../db');
 const { extractToken, requireUserFromToken } = require('../services/authService');
 const { hasRole } = require('../utils/authz');
+const { firstOutValue } = require('../utils/oracle');
 
 const router = express.Router();
 
@@ -111,7 +112,7 @@ router.post(
         },
         { autoCommit: true }
       );
-      const newId = result.outBinds.pid[0];
+      const newId = firstOutValue(result.outBinds.pid);
       return { id: newId };
     });
 

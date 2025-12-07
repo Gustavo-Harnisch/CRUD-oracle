@@ -11,7 +11,6 @@ import AuthLayout from "./layouts/AuthLayout";
 import HomePage from "./pages/public/HomePage";
 import RoomsPage from "./pages/RoomsPage";
 import ServicesPage from "./pages/ServicesPage";
-import ContactPage from "./pages/ContactPage";
 
 import LoginPage from "./pages/LoginPage";
 import AdminDashboard from "./pages/admin/AdminDashboard";
@@ -41,6 +40,7 @@ import AdminRooms from "./pages/admin/AdminRooms";
 import AdminServices from "./pages/admin/AdminServices";
 import AdminDepartments from "./pages/admin/AdminDepartments";
 import AdminDistributors from "./pages/admin/AdminDistributors";
+import AdminReports from "./pages/admin/AdminReports";
 
 const resolveHomePath = (roles = []) => {
   const normalized = Array.isArray(roles) ? roles.map((r) => String(r).toUpperCase()) : [];
@@ -67,7 +67,6 @@ function App() {
           <Route path="/" element={<HomeEntry />} />
           <Route path="/rooms" element={<RoomsPage />} />
           <Route path="/services" element={<ServicesPage />} />
-          <Route path="/contact" element={<ContactPage />} />
         </Route>
 
 
@@ -128,6 +127,7 @@ function App() {
           <Route path="/admin/rooms" element={<AdminRooms />} />
           <Route path="/admin/services" element={<AdminServices />} />
           <Route path="/admin/departments" element={<AdminDepartments />} />
+          <Route path="/admin/reports" element={<AdminReports />} />
         </Route>
 
         {/* Rutas compartidas admin/empleado (usa layout admin por ahora) */}

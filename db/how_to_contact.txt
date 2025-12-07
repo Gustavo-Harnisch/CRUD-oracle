@@ -1,0 +1,44 @@
+Guía rápida: Contacto (formularios y gestión por rol)
+====================================================
+Objetivo
+- Registrar consultas/reclamos desde la página de contacto y gestionar su seguimiento según rol (público, USER, EMPLOYEE, ADMIN) usando procedimientos PL/SQL.
+
+Modelo de tablas sugerido
+- JRGY_CAT_TIPO_CONTACTO (COD_TIPO PK, NOMBRE, DESCRIPCION) ej.: CONSULTA, RECLAMO, RESERVA, TRABAJO.
+- JRGY_CAT_ESTADO_CONTACTO (COD_ESTADO PK, NOMBRE) ej.: RECIBIDO, EN_PROCESO, RESPONDIDO, ARCHIVADO.
+- JRGY_CONTACTO:
+  * COD_CONTACTO PK (secuencia + trigger), COD_USUARIO FK nullable, NOMBRE, EMAIL, TELEFONO.
+  * COD_TIPO FK, ASUNTO, MENSAJE_CLOB, CANAL_RESPUESTA (EMAIL/TEL), PRIORIDAD (BAJA/MEDIA/ALTA).
+  * ESTADO FK, COD_EMPLEADO_ASIGNADO FK nullable, FECHA_CREACION, FECHA_RESPUESTA.
+- JRGY_CONTACTO_RESPUESTA:
+  * COD_RESPUESTA PK, COD_CONTACTO FK, COD_EMPLEADO FK, MENSAJE, CANAL_ENVIADO (EMAIL/TEL), FECHA_RESPUESTA, ES_PUBLICA CHAR(1) DEFAULT 'Y'.
+- (Opcional) JRGY_CONTACTO_ADJUNTO: COD_ADJUNTO PK, COD_CONTACTO FK, NOMBRE_ARCHIVO, MIME, DATA/BLOB.
+- Validaciones: email obligatorio, mensaje no vacío, tipo/estado deben existir; estado inicial RECIBIDO; FECHA_RESPUESTA se rellena al pasar a RESPONDIDO.
+
+Procedimientos PL/SQL recomendados
+- JRGY_PRO_CONTACTO_CREAR(p_user_id, p_nombre, p_email, p_tel, p_tipo, p_asunto, p_mensaje, p_canal_respuesta, p_id OUT)
+  * Si p_user_id no es NULL, validar que coincide con email guardado; prioridad por defecto MEDIA.
+- JRGY_PRO_CONTACTO_LISTAR(p_es_admin NUMBER, p_empleado_id, p_user_id, p_estado, p_tipo, p_busqueda, cur OUT)
+  * p_es_admin=1 devuelve todos; empleado ve asignados a él y los sin asignar; user ve solo sus mensajes (por user_id/email).
+- JRGY_PRO_CONTACTO_OBTENER(p_id, cur OUT): retorna contacto + respuestas (separar públicas/privadas).
+- JRGY_PRO_CONTACTO_ASIGNAR(p_id, p_empleado_id): marca COD_EMPLEADO_ASIGNADO y estado EN_PROCESO.
+- JRGY_PRO_CONTACTO_CAMBIAR_ESTADO(p_id, p_estado, p_notas): cambia estado; al pasar a RESPONDIDO setea FECHA_RESPUESTA.
+- JRGY_PRO_CONTACTO_RESPONDER(p_id, p_empleado_id, p_mensaje, p_canal, p_es_publica): inserta en RESPUESTA y mueve estado a RESPONDIDO.
+
+Comportamiento por rol en la página
+- Público (no logueado):
+  * Formulario simple (nombre/email/teléfono opcional, tipo, asunto, mensaje) + captcha/honeypot; canal de respuesta solo EMAIL; sin historial.
+- USER (cliente logueado):
+  * Formulario pre-rellenado con sus datos; puede ver historial de contactos propios y el estado/respuestas públicas; puede asociar una reserva (id) en el mensaje; no edita ni cierra tickets.
+- EMPLOYEE:
+  * Bandeja con contactos asignados y pendientes; puede tomar asignación, cambiar a EN_PROCESO/RESPONDIDO, registrar respuestas públicas o internas.
+  * No borra contactos; puede añadir notas internas usando respuestas con ES_PUBLICA='N'.
+- ADMIN:
+  * Ve todos los contactos, administra catálogos de tipo/estado, reasigna entre empleados, archiva o elimina si no hay litigio; ajusta prioridad.
+  * Puede exportar CSV y configurar plantillas de respuesta.
+
+Backend/Frontend pautas
+- Rutas `/api/contact` deben llamar solo a los procs (sin SQL directo); POST es público, GET/PATCH requieren autenticación según rol/propiedad.
+- Autorización: ADMIN/EMPLOYEE pueden listar y responder; USER solo crea y consulta los suyos (por user_id o email validado).
+- Front público: formulario + aviso de envío. Front logueado: historial y tracking. Front interno: tablero con filtros estado/tipo/prioridad, acciones rápidas (asignar, responder, cerrar/reabrir).
+- Notificaciones: al responder, disparar email/SMS según CANAL_RESPUESTA guardado y registrar en RESPUESTA para auditoría.

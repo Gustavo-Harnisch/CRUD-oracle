@@ -5,7 +5,6 @@ import CardImageShow from "../../components/CardImageShow.jsx";
 const homePhoto = "/home_foto.jpg";
 const roomImg = "/room.png";
 const serviceImg = "/service.png";
-const contactImg = "/contact.png";
 
 const highlights = [
   {
@@ -39,14 +38,6 @@ const spotlight = [
     linkHref: "/services",
     linkLabel: "Ver servicios",
   },
-  {
-    image: contactImg,
-    alt: "Contacto",
-    title: "Contacto",
-    text: "Coordina grupos, eventos pequeños o solicita ayuda personalizada.",
-    linkHref: "/contact",
-    linkLabel: "Hablar con el equipo",
-  },
 ];
 
 const HomePage = () => {
@@ -58,8 +49,8 @@ const HomePage = () => {
         subtitle="Descubre el valle, su vino y su cultura desde un refugio auténtico."
         primaryLabel="Explorar habitaciones"
         primaryHref="/rooms"
-        secondaryLabel="Planificar visita"
-        secondaryHref="/contact"
+        secondaryLabel="Ver servicios"
+        secondaryHref="/services"
         overlayOpacity={0.55}
       />
 
@@ -139,15 +130,15 @@ const HomePage = () => {
               <p className="text-uppercase small mb-2 opacity-75">Listo para reservar</p>
               <h3 className="h1 fw-bold mb-3">Conecta con el Maule en tu próxima escapada</h3>
               <p className="mb-0 text-white-50">
-                Escríbenos si viajas en grupo, necesitas transporte o buscas una experiencia temática.
+                Cuéntanos si viajas en grupo, necesitas transporte o buscas una experiencia temática.
               </p>
             </div>
             <div className="col-lg-5 d-flex flex-column flex-sm-row gap-2 justify-content-lg-end">
               <a href="/rooms" className="btn btn-light fw-semibold w-100 w-sm-auto">
                 Reservar ahora
               </a>
-              <a href="/contact" className="btn btn-outline-light w-100 w-sm-auto">
-                Hablar con recepción
+              <a href="/services" className="btn btn-outline-light w-100 w-sm-auto">
+                Ver servicios
               </a>
             </div>
           </div>

@@ -15,10 +15,17 @@ export const deleteRoom = (id) =>
 export const changeRoomStatus = (id, estado) =>
   api.patch(`/rooms/${id}/status`, { estado }).then((res) => res.data);
 
+export const fetchRoomTypes = () => api.get("/rooms/types").then((res) => res.data);
+
+export const createRoomType = (nombre) =>
+  api.post("/rooms/types", { nombre }).then((res) => res.data);
+
 export default {
   fetchRooms,
   createRoom,
   updateRoom,
   deleteRoom,
   changeRoomStatus,
+  fetchRoomTypes,
+  createRoomType,
 };

@@ -4,6 +4,7 @@ const { asyncHandler, AppError } = require('../utils/errors');
 const { withConnection } = require('../db');
 const { extractToken, requireUserFromToken } = require('../services/authService');
 const { hasRole } = require('../utils/authz');
+const { firstOutValue } = require('../utils/oracle');
 
 const router = express.Router();
 
@@ -74,6 +75,24 @@ function parseHorarios(horarios = []) {
 
   return parsed;
 }
+
+router.get(
+  '/services/categories',
+  asyncHandler(async (_req, res) => {
+    const categories = await withConnection(async (conn) => {
+      const result = await conn.execute(
+        `BEGIN JRGY_PRO_CAT_SERVPROD_LISTAR(:cur); END;`,
+        { cur: { dir: oracledb.BIND_OUT, type: oracledb.CURSOR } }
+      );
+      const cur = result.outBinds.cur;
+      const rows = (await cur.getRows()) || [];
+      await cur.close();
+      return (rows || []).map((r) => r.TIPO).filter(Boolean);
+    });
+
+    res.json(categories);
+  })
+);
 
 router.get(
   '/services',
@@ -168,7 +187,7 @@ router.post(
         throw err;
       }
 
-      const newId = result.outBinds.id[0];
+      const newId = firstOutValue(result.outBinds.id);
       const resGet = await conn.execute(
         `BEGIN JRGY_PRO_SERVICIO_OBTENER(:id, :curServ, :curHor); END;`,
         {
