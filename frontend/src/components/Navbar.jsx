@@ -10,9 +10,10 @@ const NAV_VARIANTS = {
     { to: "/contact", label: "Contacto" },
   ],
   CUSTOMER: [
+    { to: "/customer/dashboard", label: "Dashboard", end: true },
     { to: "/customer/bookings", label: "Mis reservas", end: true },
     { to: "/customer/reservations", label: "Nueva reserva" },
-    { to: "/customer/booking-events", label: "Eventos de reserva" },
+    { to: "/customer/booking-events", label: "Servicios de reserva" },
     { to: "/rooms", label: "Habitaciones" },
     { to: "/services", label: "Servicios y experiencias" },
     { to: "/customer/profile", label: "Perfil" },
@@ -20,11 +21,13 @@ const NAV_VARIANTS = {
   ],
   EMPLOYEE: [
     { to: "/employee/home", label: "Inicio", end: true },
-    { to: "/employee", label: "Panel diario" },
-    { to: "/employee/agenda", label: "Agenda y eventos" },
-    { to: "/employee/clients", label: "Clientes y check-in" },
+    { to: "/employee", label: "Dashboard" },
+    { to: "/employee/clients", label: "Check-in y clientes" },
+    { to: "/employee/rooms", label: "Habitaciones (ops)" },
+    { to: "/employee/services", label: "Servicios" },
     { to: "/employee/requests", label: "Peticiones de huéspedes" },
-    { to: "/rooms", label: "Habitaciones y tarifas" },
+    { to: "/employee/department", label: "Mi departamento" },
+    { to: "/admin/distributors", label: "Proveedores" },
     { to: "/contact", label: "Comunicaciones" },
   ],
   ADMIN: [
@@ -32,12 +35,12 @@ const NAV_VARIANTS = {
     { to: "/admin", label: "Dashboard" },
     { to: "/admin/inventory", label: "Inventario" },
     { to: "/admin/rooms", label: "Habitaciones" },
-    { to: "/admin/experiences", label: "Experiencias" },
+    { to: "/admin/services", label: "Servicios" },
     { to: "/admin/users", label: "Usuarios" },
     { to: "/admin/employees", label: "Empleados" },
-    { to: "/admin/rates", label: "Tarifas y promos" },
-    { to: "/admin/audit", label: "Auditoría y logs" },
-    { to: "/admin/requests", label: "Solicitudes" },
+    { to: "/admin/departments", label: "Departamentos" },
+    { to: "/admin/distributors", label: "Proveedores" },
+    // Auditoría/logs y solicitudes quedan fuera del menú hasta tener funcionalidad real.
   ],
 };
 

@@ -29,6 +29,8 @@ async function fetchReserva(conn, id) {
         r.FECHA_INICIO,
         r.FECHA_FIN,
         r.HUESPEDES,
+        r.TOTAL_HABITACION,
+        r.TOTAL_SERVICIOS,
         r.TOTAL,
         r.COD_ESTADO_RESERVA,
         h.NRO_HABITACION,
@@ -55,6 +57,8 @@ function toReservationDTO(row) {
     fechaInicio: row.FECHA_INICIO,
     fechaFin: row.FECHA_FIN,
     huespedes: row.HUESPEDES,
+    totalHabitacion: row.TOTAL_HABITACION,
+    totalServicios: row.TOTAL_SERVICIOS,
     total: row.TOTAL
   };
 }
@@ -68,37 +72,18 @@ router.get(
     const listAll = isAdmin && req.query.all === '1';
 
     const rows = await withConnection(async (conn) => {
-      const binds = {};
-      let where = '';
-      if (!listAll) {
-        where = 'WHERE r.COD_USUARIO = :userId';
-        binds.userId = user.id;
-      }
-
       const result = await conn.execute(
-        `
-          SELECT
-            r.COD_RESERVA,
-            r.COD_USUARIO,
-            r.COD_HABITACION,
-            r.FECHA_INICIO,
-            r.FECHA_FIN,
-            r.HUESPEDES,
-            r.TOTAL,
-            r.COD_ESTADO_RESERVA,
-            h.NRO_HABITACION,
-            t.TIPO_HABITACION,
-            e.ESTADO_RESERVA
-          FROM JRGY_RESERVA r
-          LEFT JOIN JRGY_HABITACION h ON h.COD_HABITACION = r.COD_HABITACION
-          LEFT JOIN JRGY_CAT_TIPO_HABITACION t ON t.COD_TIPO_HABITACION = h.COD_TIPO_HABITACION
-          LEFT JOIN JRGY_CAT_ESTADO_RESERVA e ON e.COD_ESTADO_RESERVA = r.COD_ESTADO_RESERVA
-          ${where}
-          ORDER BY r.FECHA_INICIO DESC
-        `,
-        binds
+        `BEGIN JRGY_PRO_RESERVA_LISTAR(:userId, :isAdmin, :cursor); END;`,
+        {
+          userId: user.id,
+          isAdmin: listAll ? 1 : 0,
+          cursor: { dir: oracledb.BIND_OUT, type: oracledb.CURSOR }
+        }
       );
-      return result.rows || [];
+      const cursor = result.outBinds.cursor;
+      const data = await cursor.getRows();
+      await cursor.close();
+      return data || [];
     });
 
     res.json(rows.map(toReservationDTO));
@@ -126,70 +111,25 @@ router.post(
     }
 
     await withConnection(async (conn) => {
-      const habRes = await conn.execute(
-        `
-          SELECT COD_HABITACION, PRECIO_BASE, CAPACIDAD
-          FROM JRGY_HABITACION
-          WHERE COD_HABITACION = :id
-        `,
-        { id: habitacionId }
-      );
-      const hab = (habRes.rows || [])[0];
-      if (!hab) throw new AppError('Habitación no encontrada', 404);
-      if (huespedes > hab.CAPACIDAD) {
-        throw new AppError('La habitación no soporta esa cantidad de huéspedes', 422);
-      }
-
-      const estadoCreada = await fetchEstadoReservaId(conn, 'CREADA');
-      const ms = fechaFin.getTime() - fechaInicio.getTime();
-      const noches = Math.max(1, Math.round(ms / (1000 * 60 * 60 * 24)));
-      const total = hab.PRECIO_BASE * noches;
-
       try {
         const result = await conn.execute(
-          `
-            INSERT INTO JRGY_RESERVA (
-              COD_USUARIO, COD_HABITACION, FECHA_INICIO, FECHA_FIN,
-              HUESPEDES, TOTAL, COD_ESTADO_RESERVA, CREATED_AT
-            )
-            VALUES (
-              :userId, :habId, :fi, :ff,
-              :huespedes, :total, :estado, SYSDATE
-            )
-            RETURNING COD_RESERVA INTO :id
-          `,
+          `BEGIN JRGY_PRO_RESERVA_CREAR(:userId, :habId, :fi, :ff, :huespedes, :id); END;`,
           {
             userId: user.id,
             habId: habitacionId,
             fi: fechaInicio,
             ff: fechaFin,
             huespedes,
-            total,
-            estado: estadoCreada,
             id: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER }
           },
-          { autoCommit: false }
+          { autoCommit: true }
         );
-
         const newId = result.outBinds.id[0];
-
-        await conn.execute(
-          `
-            INSERT INTO JRGY_EVENTO_RESERVA (COD_RESERVA, TIPO_EVENTO, FECHA_EVENTO, NOTAS, CREATED_BY)
-            VALUES (:resId, 'CREADA', SYSDATE, 'Reserva creada', :userId)
-          `,
-          { resId: newId, userId: user.id },
-          { autoCommit: false }
-        );
-
-        await conn.commit();
         const row = await fetchReserva(conn, newId);
         res.status(201).json(toReservationDTO(row));
       } catch (err) {
-        await conn.rollback();
-        if (err.errorNum === 20061 || err.errorNum === 20062) {
-          throw new AppError('La habitación ya está reservada en ese rango. Prueba con otras fechas o habitación.', 409);
-        }
+        if (err.errorNum === 20090) throw new AppError('La habitación no soporta esa cantidad de huéspedes', 422);
+        if (err.errorNum === 20091) throw new AppError('Habitación no encontrada', 404);
         throw err;
       }
     });

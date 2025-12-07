@@ -1,4 +1,5 @@
 const express = require('express');
+const oracledb = require('oracledb');
 const { asyncHandler } = require('../utils/errors');
 const { withConnection } = require('../db');
 
@@ -9,19 +10,13 @@ router.get(
   asyncHandler(async (_req, res) => {
     const experiences = await withConnection(async (conn) => {
       const result = await conn.execute(
-        `
-          SELECT
-            COD_EXPERIENCIA AS ID,
-            NOMBRE,
-            DESCRIPCION,
-            PRECIO,
-            TAG,
-            ESTADO
-          FROM JRGY_EXPERIENCIA
-          ORDER BY COD_EXPERIENCIA
-        `
+        `BEGIN JRGY_PRO_EXPERIENCIA_LISTAR(:cursor); END;`,
+        { cursor: { dir: oracledb.BIND_OUT, type: oracledb.CURSOR } }
       );
-      return result.rows || [];
+      const cursor = result.outBinds.cursor;
+      const rows = await cursor.getRows();
+      await cursor.close();
+      return rows || [];
     });
 
     res.json(

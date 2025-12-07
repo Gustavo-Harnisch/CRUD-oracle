@@ -13,7 +13,10 @@ const loadStoredAuth = () => {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) return null;
   try {
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    // Si se guardó solo el token, usamos ese token; si falta, no devolvemos nada.
+    if (!parsed?.token) return null;
+    return parsed;
   } catch (error) {
     return null;
   }

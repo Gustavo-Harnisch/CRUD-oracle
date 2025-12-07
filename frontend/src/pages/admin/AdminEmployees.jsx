@@ -1,64 +1,363 @@
-// src/pages/admin/AdminEmployees.jsx
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { createEmployee, deleteEmployee, listEmployees, updateEmployee } from "../../services/employeeService";
+import { useAuth } from "../../context/AuthContext";
 
-const employeeModules = [
-  {
-    title: "Equipo activo",
-    description: "Listado de empleados, estados y accesos de la plataforma.",
-    bullets: ["Altas y bajas", "Documentación vigente", "Roles asignados"],
-    cta: { label: "Gestionar usuarios", to: "/admin/users" },
-  },
-  {
-    title: "Turnos y cobertura",
-    description: "Planea turnos, descansos y asignaciones por área.",
-    bullets: ["Turnos abiertos", "Cobertura por piso", "Alertas de sobrecarga"],
-  },
-  {
-    title: "Onboarding y capacitación",
-    description: "Registra capacitaciones y tareas de incorporación.",
-    bullets: ["Checklist de ingreso", "Capacitaciones pendientes", "Historial de cursos"],
-  },
-];
+const emptyForm = {
+  usuarioId: "",
+  nombre: "",
+  rol: "",
+  email: "",
+  sueldo: "",
+  estado: "ACTIVO",
+  departamento: "",
+  fechaContratacion: "",
+};
 
 const AdminEmployees = () => {
+  const { logout } = useAuth();
+  const [employees, setEmployees] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [filters, setFilters] = useState({ search: "", rol: "", estado: "" });
+  const [form, setForm] = useState(emptyForm);
+  const [editingId, setEditingId] = useState(null);
+
+  const load = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const data = await listEmployees();
+      setEmployees(data);
+    } catch (err) {
+      const status = err?.response?.status;
+      if (status === 401) {
+        logout();
+        window.location.href = "/login";
+      } else {
+        setError("No se pudieron cargar los empleados.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  const filtered = useMemo(() => {
+    return employees.filter((e) => {
+      const s = filters.search
+        ? `${e.nombre || ""} ${e.email || ""}`.toLowerCase().includes(filters.search.toLowerCase())
+        : true;
+      const r = filters.rol ? (e.cargo || "").toLowerCase() === filters.rol.toLowerCase() : true;
+      const st = filters.estado ? (e.estado || "").toUpperCase() === filters.estado.toUpperCase() : true;
+      return s && r && st;
+    });
+  }, [employees, filters]);
+
+  const handleEdit = (emp) => {
+    setEditingId(emp.id);
+    setForm({
+      usuarioId: emp.usuarioId || "",
+      nombre: emp.nombre,
+      rol: emp.cargo,
+      email: emp.email,
+      sueldo: emp.sueldoBase,
+      estado: emp.estadoLaboral || "ACTIVO",
+      departamento: emp.departamento || "NONE",
+      fechaContratacion: emp.fechaContratacion ? emp.fechaContratacion.slice(0, 10) : "",
+    });
+  };
+
+  const handleReset = () => {
+    setEditingId(null);
+    setForm(emptyForm);
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+    try {
+      const payload = {
+        usuarioId: Number(form.usuarioId),
+        cargo: form.rol,
+        sueldoBase: form.sueldo === "" ? null : Number(form.sueldo),
+        fechaContratacion: form.fechaContratacion || new Date().toISOString().slice(0, 10),
+        departamentoId: form.departamento && form.departamento !== "NONE" ? Number(form.departamento) : null,
+        estadoLaboral: form.estado,
+      };
+      if (editingId) {
+        await updateEmployee(editingId, payload);
+      } else {
+        await createEmployee(payload);
+      }
+      await load();
+      handleReset();
+    } catch (err) {
+      const status = err?.response?.status;
+      if (status === 401) {
+        logout();
+        window.location.href = "/login";
+      } else {
+        setError(err?.response?.data?.message || "No se pudo guardar el empleado.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm("¿Eliminar este empleado?")) return;
+    setError("");
+    try {
+      await deleteEmployee(id);
+      await load();
+    } catch (err) {
+      const status = err?.response?.status;
+      if (status === 401) {
+        logout();
+        window.location.href = "/login";
+      } else {
+        setError(err?.response?.data?.message || "No se pudo eliminar.");
+      }
+    }
+  };
+
   return (
-    <div className="container py-4">
-      <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-3">
+    <div className="container-xxl py-4">
+      <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4">
         <div>
-          <p className="text-uppercase text-muted mb-1 small">Administración</p>
-          <h1 className="h4 mb-0">Empleados</h1>
-          <p className="text-muted small mb-0">
-            Mantén separadas las funciones de personal, turnos y onboarding.
-          </p>
+          <p className="text-uppercase text-muted small mb-1">Admin · Empleados</p>
+          <h1 className="h4 mb-1">Equipo y accesos</h1>
+          <p className="text-muted small mb-0">Solo ADMIN gestiona altas/bajas de empleados.</p>
         </div>
-        <Link to="/admin" className="btn btn-outline-secondary btn-sm mt-3 mt-md-0">
-          Volver al dashboard
-        </Link>
+        {loading && <span className="badge bg-warning-subtle text-warning border">Cargando…</span>}
       </div>
 
-      <div className="row g-3">
-        {employeeModules.map(({ title, description, bullets, cta }) => (
-          <div className="col-md-4" key={title}>
-            <div className="card h-100 shadow-sm">
-              <div className="card-body d-flex flex-column">
-                <h5 className="card-title">{title}</h5>
-                <p className="card-text text-muted">{description}</p>
-                <ul className="text-muted small ps-3 mb-3">
-                  {bullets.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
-                {cta ? (
-                  <Link to={cta.to} className="btn btn-primary btn-sm align-self-start">
-                    {cta.label}
-                  </Link>
-                ) : (
-                  <span className="text-secondary small">Agrega aquí tus flujos.</span>
-                )}
+      {error && <div className="alert alert-danger">{error}</div>}
+
+      <div className="row g-3 g-xl-4 align-items-start">
+        <div className="col-lg-5 col-xl-4">
+          <div className="card shadow-sm h-100">
+            <div className="card-body p-4 p-xl-5">
+              <h2 className="h6 mb-4">{editingId ? "Editar empleado" : "Nuevo empleado"}</h2>
+              <form className="row g-3" onSubmit={handleSubmit}>
+                <div className="col-12">
+                  <label className="form-label">Usuario ID</label>
+                  <input
+                    type="number"
+                    min="1"
+                    className="form-control"
+                    value={form.usuarioId}
+                    onChange={(e) => setForm((p) => ({ ...p, usuarioId: e.target.value }))}
+                    required
+                  />
+                </div>
+                <div className="col-12">
+                  <label className="form-label">Nombre completo</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={form.nombre}
+                    onChange={(e) => setForm((p) => ({ ...p, nombre: e.target.value }))}
+                  />
+                </div>
+                <div className="col-md-6">
+                  <label className="form-label">Rol/área</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={form.rol}
+                    onChange={(e) => setForm((p) => ({ ...p, rol: e.target.value }))}
+                  />
+                </div>
+                <div className="col-md-6">
+                  <label className="form-label">Email</label>
+                  <input
+                    type="email"
+                    className="form-control"
+                    value={form.email}
+                    onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
+                  />
+                </div>
+                <div className="col-md-6">
+                  <label className="form-label">Sueldo base</label>
+                  <input
+                    type="number"
+                    min="0"
+                    className="form-control"
+                    value={form.sueldo}
+                    onChange={(e) => setForm((p) => ({ ...p, sueldo: e.target.value }))}
+                  />
+                </div>
+                <div className="col-md-6">
+                  <label className="form-label">Departamento</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={form.departamento}
+                    onChange={(e) => setForm((p) => ({ ...p, departamento: e.target.value }))}
+                    placeholder="NONE si no aplica"
+                  />
+                </div>
+                <div className="col-md-6">
+                  <label className="form-label">Fecha de contratación</label>
+                  <input
+                    type="date"
+                    className="form-control"
+                    value={form.fechaContratacion}
+                    onChange={(e) => setForm((p) => ({ ...p, fechaContratacion: e.target.value }))}
+                  />
+                </div>
+                <div className="col-md-6">
+                  <label className="form-label">Estado</label>
+                  <select
+                    className="form-select"
+                    value={form.estado}
+                    onChange={(e) => setForm((p) => ({ ...p, estado: e.target.value }))}
+                  >
+                    <option value="ACTIVO">Activo</option>
+                    <option value="INACTIVO">Inactivo</option>
+                  </select>
+                </div>
+                <div className="col-12 d-flex gap-2">
+                  <button className="btn btn-primary" type="submit" disabled={loading}>
+                    Guardar
+                  </button>
+                  {editingId && (
+                    <button type="button" className="btn btn-outline-secondary" onClick={handleReset}>
+                      Cancelar edición
+                    </button>
+                  )}
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <div className="col-lg-7 col-xl-8">
+          <div className="card shadow-sm h-100">
+            <div className="card-body p-4 p-xl-5">
+              <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
+                <div>
+                  <h2 className="h6 mb-1">Listado</h2>
+                  <p className="text-muted small mb-0">Filtra por rol, estado o nombre.</p>
+                </div>
+                <div className="d-flex gap-2 flex-wrap">
+                  <button
+                    className="btn btn-sm btn-outline-secondary px-3"
+                    type="button"
+                    onClick={() => setFilters({ search: "", rol: "", estado: "" })}
+                  >
+                    Limpiar filtros
+                  </button>
+                </div>
+              </div>
+
+              <div className="row g-3 mb-4 align-items-end">
+                <div className="col-12 col-lg-4">
+                  <label className="form-label small text-muted mb-1">Buscar</label>
+                  <input
+                    type="search"
+                    className="form-control"
+                    placeholder="Nombre o email"
+                    value={filters.search}
+                    onChange={(e) => setFilters((p) => ({ ...p, search: e.target.value }))}
+                  />
+                </div>
+                <div className="col-6 col-lg-4">
+                  <label className="form-label small text-muted mb-1">Rol/área</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="Recepción"
+                    value={filters.rol}
+                    onChange={(e) => setFilters((p) => ({ ...p, rol: e.target.value }))}
+                  />
+                </div>
+                <div className="col-6 col-lg-2">
+                  <label className="form-label small text-muted mb-1">Estado</label>
+                  <select
+                    className="form-select"
+                    value={filters.estado}
+                    onChange={(e) => setFilters((p) => ({ ...p, estado: e.target.value }))}
+                  >
+                    <option value="">Todos</option>
+                    <option value="ACTIVO">Activo</option>
+                    <option value="INACTIVO">Inactivo</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="table-responsive">
+                <table className="table table-striped table-hover align-middle">
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Nombre</th>
+                      <th>Rol/área</th>
+                      <th>Email</th>
+                      <th>Departamento</th>
+                      <th>Sueldo base</th>
+                      <th>Estado</th>
+                      <th className="text-end">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {loading && (
+                      <tr>
+                        <td colSpan={8} className="py-3 text-muted">
+                          Cargando...
+                        </td>
+                      </tr>
+                    )}
+                    {!loading &&
+                      filtered.map((e) => (
+                        <tr key={e.id}>
+                          <td className="py-3">{e.id}</td>
+                          <td className="py-3 fw-semibold">{e.nombre}</td>
+                          <td className="py-3 text-muted">{e.cargo || e.rol}</td>
+                          <td className="py-3">{e.email}</td>
+                          <td className="py-3">{e.departamento || "NONE"}</td>
+                          <td className="py-3">$ {Number(e.sueldoBase || e.sueldo || 0).toLocaleString()}</td>
+                          <td className="py-3">
+                            <span
+                              className={
+                                (e.estado || "ACTIVO").toUpperCase() === "ACTIVO"
+                                  ? "badge bg-success-subtle text-success border"
+                                  : "badge bg-secondary-subtle text-secondary border"
+                              }
+                            >
+                              {e.estado || "ACTIVO"}
+                            </span>
+                          </td>
+                          <td className="text-end py-3">
+                            <div className="btn-group btn-group-sm">
+                              <button className="btn btn-outline-primary" type="button" onClick={() => handleEdit(e)}>
+                                Editar
+                              </button>
+                              <button className="btn btn-outline-danger" type="button" disabled>
+                                Eliminar
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    {!loading && filtered.length === 0 && (
+                      <tr>
+                        <td colSpan={8} className="py-3 text-muted small">
+                          Sin resultados.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
-        ))}
+        </div>
       </div>
     </div>
   );

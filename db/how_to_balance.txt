@@ -1,0 +1,39 @@
+Guía rápida: Pagos, balances e ingresos/egresos
+===============================================
+Objetivo
+- Definir cómo calcular y consultar ganancias/pérdidas combinando ingresos (reservas/ventas) y egresos (compras a proveedores), solo para ADMIN/EMPLOYEE.
+- Unificar el uso de procedimientos (sin SQL directo) para reportes financieros básicos.
+
+Estado actual en BD
+- Ingresos:
+  * Reservas: JRGY_RESERVA (totales habitación/servicios) y eventos; pagos habitaciones en JRGY_PAGO_HABITACION + JRGY_DETALLE_PAGO_HABITACION.
+  * Servicios en reservas: JRGY_RESERVA_SERVICIO / procs de reserva-servicio.
+  * Ventas de productos: JRGY_VENTA y JRGY_DETALLE_VENTA; pagos en JRGY_PAGO_VENTA (modo de pago).
+- Egresos:
+  * Compras: JRGY_PEDIDO + JRGY_DETALLE_PEDIDO (producto, cantidad, precio_compra).
+  * Movimientos de stock (entradas/salidas) en JRGY_MOVIMIENTO_STOCK.
+- Catálogo de medios de pago: JRGY_CAT_MODO_PAGO.
+
+Procedimientos recomendados (reporting)
+- Ingresos:
+  * JRGY_PRO_REPORTE_INGRESOS_RESERVAS(p_fecha_desde, p_fecha_hasta, cur OUT): suma por día/mes de reservas y servicios asociados.
+  * JRGY_PRO_REPORTE_INGRESOS_VENTAS(p_fecha_desde, p_fecha_hasta, cur OUT): suma ventas de productos (detalle_venta).
+- Egresos:
+  * JRGY_PRO_REPORTE_EGRESOS_COMPRAS(p_fecha_desde, p_fecha_hasta, cur OUT): suma de pedidos/detalle_pedido (precio_compra*cantidad).
+  * (Opcional) JRGY_PRO_REPORTE_STOCK_VALORIZADO(cur OUT): stock actual * costo último o costo promedio (definir política).
+- Balance:
+  * JRGY_PRO_REPORTE_BALANCE(p_fecha_desde, p_fecha_hasta, cur OUT): ingresos - egresos agregados; devolver ingresos_reservas, ingresos_ventas, egresos_compras y utilidad.
+
+Roles y permisos
+- ADMIN: acceso a todos los reportes; puede ver y exportar balances.
+- EMPLOYEE: puede consultar reportes operativos (ingresos/egresos) si se le otorga permiso de rol; no modifica catálogos financieros.
+- USER: sin acceso.
+
+Pautas de implementación backend/front
+- Backend: exponer endpoints /api/reports/... que llamen a los procs anteriores; sin SQL directo. Validar rol ADMIN (y EMPLOYEE si aplica).
+- Front admin: vista de reportes con filtros de fecha y tarjetas de resumen (ingresos, egresos, utilidad). Permitir exportar CSV.
+
+Notas de diseño
+- Decidir política de costo para stock valorizado (último costo vs. promedio ponderado).
+- Pagos: si se quiere reflejar caja vs. devengado, agregar campos de fecha de pago real en compras y reservas. De momento usar fecha de pedido/venta/reserva.
+- Considerar timezone y cerrar periodos por día/mes en los procs.

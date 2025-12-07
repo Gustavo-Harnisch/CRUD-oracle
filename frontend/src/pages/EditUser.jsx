@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import UserForm from "../components/UserForm";
 import { getUserById, updateUser } from "../services/userService";
 
-const EditarUsuario = () => {
+const EditUser = () => {
   const { id } = useParams();
   const navigate = useNavigate();
 
@@ -95,4 +95,4 @@ const EditarUsuario = () => {
   );
 };
 
-export default EditarUsuario;
+export default EditUser;

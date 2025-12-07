@@ -1,74 +1,97 @@
-// src/pages/admin/AdminDashboard.jsx
-import { Link } from "react-router-dom";
+// Restored dashboard with status badges similar al comportamiento original.
+import { Link, useLocation } from "react-router-dom";
+import { PAGE_STATUS, getStatusClasses, resolvePageStatus } from "../../utils/pageStatus";
 
-const adminCards = [
-  {
-    id: "inventory",
-    title: "Cuartos e inventario",
-    text: "Controla disponibilidad, bloqueos y existencias sin mezclarlo con otros flujos.",
-    linkHref: "/admin/inventory",
-    linkLabel: "Ir a inventario",
-  },
-  {
-    id: "users",
-    title: "Usuarios",
-    text: "Revisa y administra las cuentas de usuarios del sistema.",
-    linkHref: "/admin/users",
-    linkLabel: "Gestionar usuarios",
-  },
-  {
-    id: "employees",
-    title: "Empleados",
-    text: "Organiza turnos, altas/bajas y procesos de onboarding.",
-    linkHref: "/admin/employees",
-    linkLabel: "Ver empleados",
-  },
-  {
-    id: "rates",
-    title: "Tarifas y promos",
-    text: "Configura precios, temporadas y campañas sin afectar otros módulos.",
-    linkHref: "/admin/rates",
-    linkLabel: "Configurar tarifas",
-  },
-  {
-    id: "audit",
-    title: "Auditoría y logs",
-    text: "Consulta eventos sensibles y exporta registros cuando lo necesites.",
-    linkHref: "/admin/audit",
-    linkLabel: "Ver logs",
-  },
-  {
-    id: "requests",
-    title: "Solicitudes de admin",
-    text: "Aprueba o rechaza solicitudes de elevación a administrador.",
-    linkHref: "/admin/requests",
-    linkLabel: "Ver solicitudes",
-  },
+const adminPages = [
+  { id: "home", title: "Inicio admin", description: "Hero y accesos protegidos.", path: "/admin/home" },
+  { id: "dashboard", title: "Dashboard", description: "Resumen y enlaces rápidos.", path: "/admin" },
+  { id: "inventory", title: "Inventario", description: "Productos, stock y umbrales.", path: "/admin/inventory" },
+  { id: "rooms", title: "Habitaciones", description: "Catálogo, estado y precios base.", path: "/admin/rooms" },
+  { id: "services", title: "Servicios", description: "Servicios y horarios.", path: "/admin/services" },
+  { id: "users", title: "Usuarios", description: "Altas/bajas, roles y filtros.", path: "/admin/users" },
+  { id: "employees", title: "Empleados", description: "Equipo interno y accesos.", path: "/admin/employees" },
+  { id: "departments", title: "Departamentos", description: "Áreas, presupuestos y responsables.", path: "/admin/departments" },
+  { id: "distributors", title: "Proveedores", description: "Distribuidores y solicitudes de compra.", path: "/admin/distributors" },
 ];
 
 const AdminDashboard = () => {
-  return (
-    <div className="container py-4">
-      <p className="text-uppercase text-muted mb-1 small">Administración</p>
-      <h1 className="h3 mb-1">Panel de administración</h1>
-      <p className="text-muted">
-        Gestiona cada área en su propia página para mantener el código modular.
-      </p>
+  const { pathname } = useLocation();
+  const pagesWithStatus = adminPages.map((page) => ({
+    ...page,
+    status: resolvePageStatus(page.path),
+    active: pathname === page.path,
+  }));
+  const quickIds = ["inventory", "rooms", "services", "users"];
+  const quickLinks = pagesWithStatus.filter((p) => quickIds.includes(p.id));
+  const otherLinks = pagesWithStatus.filter((p) => !quickIds.includes(p.id));
+  const liveCount = pagesWithStatus.filter((p) => p.status === PAGE_STATUS.LIVE).length;
+  const editingCount = pagesWithStatus.filter((p) => p.status === PAGE_STATUS.EDITING).length;
 
-      <div className="row g-3">
-        {adminCards.map((card) => (
-          <div className="col-md-4" key={card.id}>
-            <div className="card h-100 shadow-sm">
-              <div className="card-body d-flex flex-column">
-                <h5 className="card-title">{card.title}</h5>
-                <p className="card-text text-muted flex-grow-1">{card.text}</p>
-                <Link to={card.linkHref} className="btn btn-outline-primary btn-sm align-self-start">
-                  {card.linkLabel}
-                </Link>
-              </div>
+  return (
+    <div className="container-xxl py-4">
+      <div className="bg-white border rounded-4 shadow-sm p-4 p-lg-5 mb-4">
+        <div className="d-flex flex-column flex-lg-row justify-content-between gap-3">
+          <div>
+            <p className="text-uppercase text-muted mb-1 small">Administración</p>
+            <h1 className="h3 mb-2">Panel de administración</h1>
+            <p className="text-muted mb-0">Estado de las páginas y accesos rápidos al rol ADMIN.</p>
+          </div>
+          <div className="d-flex flex-wrap gap-3">
+            <div className="px-3 py-2 border rounded-3 bg-light">
+              <div className="fw-semibold fs-5">{pagesWithStatus.length}</div>
+              <div className="text-muted small">Páginas ADMIN</div>
+            </div>
+            <div className="px-3 py-2 border rounded-3 bg-light">
+              <div className="fw-semibold text-success">{liveCount}</div>
+              <div className="text-muted small">LIVE</div>
+            </div>
+            <div className="px-3 py-2 border rounded-3 bg-light">
+              <div className="fw-semibold text-warning">{editingCount}</div>
+              <div className="text-muted small">EDITING</div>
             </div>
           </div>
-        ))}
+        </div>
+
+        <div className="row g-3">
+          {pagesWithStatus.map((page) => (
+            <div className="col-md-4" key={page.id}>
+              <div className={`card h-100 shadow-sm ${page.active ? "border-primary" : ""}`}>
+                <div className="card-body d-flex flex-column">
+                  <div className="d-flex justify-content-between align-items-center mb-2">
+                    <h5 className="card-title mb-0">{page.title}</h5>
+                    <span className={`badge ${getStatusClasses(page.status)}`}>{page.status}</span>
+                  </div>
+                  <p className="card-text text-muted flex-grow-1">{page.description}</p>
+                  <Link
+                    to={page.path}
+                    className={`btn btn-sm ${page.active ? "btn-primary" : "btn-outline-primary"} align-self-start`}
+                  >
+                    Ir
+                  </Link>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-4">
+          <p className="text-muted small mb-1">Accesos rápidos</p>
+          <div className="d-flex flex-wrap gap-2 mb-2">
+            {quickLinks.map((p) => (
+              <Link key={p.id} to={p.path} className="btn btn-outline-secondary btn-sm">
+                {p.title}
+              </Link>
+            ))}
+          </div>
+          <p className="text-muted small mb-1">Otros módulos</p>
+          <div className="d-flex flex-wrap gap-2">
+            {otherLinks.map((p) => (
+              <Link key={p.id} to={p.path} className="btn btn-outline-secondary btn-sm">
+                {p.title}
+              </Link>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );

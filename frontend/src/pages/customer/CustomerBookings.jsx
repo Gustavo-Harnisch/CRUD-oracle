@@ -1,7 +1,14 @@
 // src/pages/customer/CustomerBookings.jsx
 import { useEffect, useMemo, useState } from "react";
 import BookingDetailCard from "../../components/BookingDetailCard";
-import { fetchReservations, fetchReservationEvents } from "../../services/bookingService";
+import {
+  fetchReservations,
+  fetchReservationEvents,
+  fetchReservationServices,
+  addReservationService,
+  cancelReservationService,
+} from "../../services/bookingService";
+import { listServices } from "../../services/serviceService";
 
 const statusBadge = (status = "") => {
   const normalized = status.toLowerCase();
@@ -19,13 +26,35 @@ const CustomerBookings = () => {
   const [selectedBookingId, setSelectedBookingId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [servicesCatalog, setServicesCatalog] = useState([]);
+  const [reservationServices, setReservationServices] = useState([]);
+  const [serviceForm, setServiceForm] = useState({
+    serviceId: "",
+    fecha: "",
+    hora: "",
+    cantidad: 1,
+    nota: "",
+  });
+  const [loadingServices, setLoadingServices] = useState(false);
+  const [savingService, setSavingService] = useState(false);
+
+  useEffect(() => {
+    if (servicesCatalog.length && !serviceForm.serviceId) {
+      setServiceForm((prev) => ({ ...prev, serviceId: servicesCatalog[0].id }));
+    }
+  }, [servicesCatalog, serviceForm.serviceId]);
 
   useEffect(() => {
     const load = async () => {
       setLoading(true);
       setError("");
       try {
-        const data = await fetchReservations();
+        const [resData, svcData] = await Promise.all([
+          fetchReservations(),
+          listServices(),
+        ]);
+        setServicesCatalog(svcData);
+        const data = resData;
         setBookings(
           data.map((b) => ({
             ...b,
@@ -35,6 +64,8 @@ const CustomerBookings = () => {
             roomType: b.tipo,
             status: b.estado,
             guests: b.huespedes,
+            totalHabitacion: b.totalHabitacion ?? b.total_habitacion,
+            totalServicios: b.totalServicios ?? b.total_servicios,
           })),
         );
       } catch (err) {
@@ -64,28 +95,166 @@ const CustomerBookings = () => {
     setStatusFilter("");
   };
 
+  const selectedService = useMemo(
+    () => servicesCatalog.find((s) => String(s.id) === String(serviceForm.serviceId)),
+    [servicesCatalog, serviceForm.serviceId]
+  );
+
+  const formatTime = (num) => {
+    if (num === null || num === undefined) return "";
+    const totalMinutes = Math.round(Number(num) * 60);
+    const hh = Math.floor(totalMinutes / 60);
+    const mm = totalMinutes % 60;
+    return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+  };
+
+  const blockOptions = useMemo(() => {
+    if (selectedService && Array.isArray(selectedService.horarios) && selectedService.horarios.length > 0) {
+      return selectedService.horarios.map((h) => {
+        const start = Number(h.inicio ?? h.horaInicio ?? 0);
+        const end = Number(h.fin ?? h.horaFin ?? start);
+        return {
+          value: start,
+          label: `${formatTime(start)} - ${formatTime(end)}`,
+        };
+      });
+    }
+    return [{ value: 0, label: "00:00 - 23:00" }];
+  }, [selectedService]);
+
+  useEffect(() => {
+    if (blockOptions.length === 0) return;
+    const current = Number(serviceForm.hora);
+    const values = blockOptions.map((b) => b.value);
+    if (serviceForm.hora === "" || Number.isNaN(current) || !values.includes(current)) {
+      setServiceForm((prev) => ({ ...prev, hora: blockOptions[0].value }));
+    }
+  }, [blockOptions, serviceForm.hora]);
+
   const selectedBooking = selectedBookingId
     ? bookings.find((b) => b.id === selectedBookingId)
     : null;
 
   const [selectedEvents, setSelectedEvents] = useState([]);
 
+  const refreshBookingData = async () => {
+    try {
+      setLoadingServices(true);
+      const data = await fetchReservations();
+      setBookings(
+        data.map((b) => ({
+          ...b,
+          created: b.fechaInicio,
+          start: b.fechaInicio,
+          end: b.fechaFin,
+          roomType: b.tipo,
+          status: b.estado,
+          guests: b.huespedes,
+          totalHabitacion: b.totalHabitacion ?? b.total_habitacion,
+          totalServicios: b.totalServicios ?? b.total_servicios,
+        })),
+      );
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingServices(false);
+    }
+  };
+
+  const reloadReservationServices = async (bookingId) => {
+    if (!bookingId) return;
+    try {
+      setLoadingServices(true);
+      const [events, services] = await Promise.all([
+        fetchReservationEvents(bookingId),
+        fetchReservationServices(bookingId),
+      ]);
+      setSelectedEvents(events);
+      setReservationServices(services);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingServices(false);
+    }
+  };
+
   useEffect(() => {
     const loadEvents = async () => {
       if (!selectedBookingId) {
         setSelectedEvents([]);
+        setReservationServices([]);
         return;
       }
       try {
-        const events = await fetchReservationEvents(selectedBookingId);
+        const [events, services] = await Promise.all([
+          fetchReservationEvents(selectedBookingId),
+          fetchReservationServices(selectedBookingId),
+        ]);
         setSelectedEvents(events);
+        setReservationServices(services);
+        const booking = bookings.find((b) => b.id === selectedBookingId);
+        setServiceForm((prev) => ({
+          ...prev,
+          serviceId: servicesCatalog[0]?.id || prev.serviceId || "",
+          fecha: booking?.start?.slice(0, 10) || "",
+          hora: "",
+          cantidad: 1,
+          nota: "",
+        }));
       } catch (err) {
         console.error(err);
         setSelectedEvents([]);
+        setReservationServices([]);
       }
     };
     loadEvents();
-  }, [selectedBookingId]);
+  }, [selectedBookingId, bookings, servicesCatalog]);
+
+  const handleAddService = async (e) => {
+    e.preventDefault();
+    if (!selectedBooking) return;
+    if (!serviceForm.serviceId || !serviceForm.fecha) return;
+    setSavingService(true);
+    setError("");
+    try {
+      await addReservationService(selectedBooking.id, {
+        serviceId: Number(serviceForm.serviceId),
+        fechaServicio: serviceForm.fecha,
+        hora: Number(serviceForm.hora || 0),
+        cantidad: Number(serviceForm.cantidad || 1),
+        nota: serviceForm.nota,
+      });
+      await reloadReservationServices(selectedBooking.id);
+      await refreshBookingData();
+      setServiceForm((prev) => ({
+        ...prev,
+        hora: "",
+        cantidad: 1,
+        nota: "",
+      }));
+    } catch (err) {
+      console.error(err);
+      const message = err?.response?.data?.message || "No se pudo agregar el servicio.";
+      setError(message);
+    } finally {
+      setSavingService(false);
+    }
+  };
+
+  const handleCancelService = async (itemId) => {
+    if (!selectedBooking) return;
+    if (!window.confirm("¿Cancelar este servicio de la reserva?")) return;
+    setError("");
+    try {
+      await cancelReservationService(selectedBooking.id, itemId);
+      await reloadReservationServices(selectedBooking.id);
+      await refreshBookingData();
+    } catch (err) {
+      console.error(err);
+      const message = err?.response?.data?.message || "No se pudo cancelar el servicio.";
+      setError(message);
+    }
+  };
 
   return (
     <div className="container py-4">
@@ -199,11 +368,163 @@ const CustomerBookings = () => {
       )}
 
       {selectedBooking && (
-        <BookingDetailCard
-          booking={selectedBooking}
-          events={selectedEvents}
-          onClose={() => setSelectedBookingId(null)}
-        />
+        <>
+          <BookingDetailCard
+            booking={selectedBooking}
+            events={selectedEvents}
+            onClose={() => setSelectedBookingId(null)}
+          />
+
+          <div className="row g-3 mt-2">
+            <div className="col-lg-4">
+              <div className="card shadow-sm h-100">
+                <div className="card-body">
+                  <h2 className="h6 mb-3">Agregar servicio</h2>
+                  <form className="row g-2" onSubmit={handleAddService}>
+                    <div className="col-12">
+                      <label className="form-label">Servicio</label>
+                      <select
+                        className="form-select"
+                        value={serviceForm.serviceId}
+                        onChange={(e) => setServiceForm((prev) => ({ ...prev, serviceId: e.target.value }))}
+                      >
+                        {servicesCatalog.map((svc) => (
+                          <option key={svc.id} value={svc.id}>
+                            {svc.nombre} (${Number(svc.precio || 0).toLocaleString()})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="col-6">
+                      <label className="form-label">Fecha</label>
+                      <input
+                        type="date"
+                        className="form-control"
+                        value={serviceForm.fecha}
+                        min={selectedBooking.start?.slice(0, 10)}
+                        max={selectedBooking.end?.slice(0, 10)}
+                        onChange={(e) => setServiceForm((prev) => ({ ...prev, fecha: e.target.value }))}
+                        required
+                      />
+                    </div>
+                    <div className="col-6">
+                      <label className="form-label">Bloque horario</label>
+                      <select
+                        className="form-select"
+                        value={serviceForm.hora}
+                        onChange={(e) => setServiceForm((prev) => ({ ...prev, hora: Number(e.target.value) }))}
+                        required
+                      >
+                        {blockOptions.map((b) => (
+                          <option key={b.value} value={b.value}>
+                            {b.label}
+                          </option>
+                        ))}
+                      </select>
+                      <small className="text-muted">Se muestran solo los bloques permitidos por el servicio.</small>
+                    </div>
+                    <div className="col-6">
+                      <label className="form-label">Cantidad</label>
+                      <input
+                        type="number"
+                        min="1"
+                        className="form-control"
+                        value={serviceForm.cantidad}
+                        onChange={(e) =>
+                          setServiceForm((prev) => ({ ...prev, cantidad: Number(e.target.value) || 1 }))
+                        }
+                        required
+                      />
+                    </div>
+                    <div className="col-12">
+                      <label className="form-label">Notas</label>
+                      <textarea
+                        className="form-control"
+                        rows={2}
+                        value={serviceForm.nota}
+                        onChange={(e) => setServiceForm((prev) => ({ ...prev, nota: e.target.value }))}
+                        placeholder="Ej: toallas extra"
+                      />
+                    </div>
+                    <div className="col-12">
+                      <button className="btn btn-primary w-100" type="submit" disabled={savingService}>
+                        {savingService ? "Guardando..." : "Agregar"}
+                      </button>
+                    </div>
+                  </form>
+                  <small className="text-muted d-block mt-2">
+                    Solo puedes agendar dentro de las fechas de tu reserva.
+                  </small>
+                </div>
+              </div>
+            </div>
+            <div className="col-lg-8">
+              <div className="card shadow-sm h-100">
+                <div className="card-body">
+                  <div className="d-flex justify-content-between align-items-center mb-2">
+                    <h2 className="h6 mb-0">Servicios en la reserva</h2>
+                    {loadingServices && <span className="text-muted small">Actualizando...</span>}
+                  </div>
+                  {reservationServices.length > 0 ? (
+                    <div className="table-responsive">
+                      <table className="table table-striped align-middle">
+                        <thead>
+                          <tr>
+                            <th>Fecha</th>
+                            <th>Hora</th>
+                            <th>Servicio</th>
+                            <th>Cant</th>
+                            <th>Subtotal</th>
+                            <th>Estado</th>
+                            <th />
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {reservationServices.map((item) => (
+                            <tr key={item.id}>
+                              <td>{(item.fecha || "").slice(0, 10)}</td>
+                              <td>{String(item.hora).padStart(2, "0")}:00</td>
+                              <td>
+                                <div className="fw-semibold">{item.servicioNombre}</div>
+                                <small className="text-muted">{item.nota || "Sin notas"}</small>
+                              </td>
+                              <td>{item.cantidad}</td>
+                              <td>$ {Number(item.total || 0).toLocaleString()}</td>
+                              <td>
+                                <span
+                                  className={
+                                    item.estado === "cancelado"
+                                      ? "badge bg-danger-subtle text-danger border"
+                                      : "badge bg-success-subtle text-success border"
+                                  }
+                                >
+                                  {item.estado}
+                                </span>
+                              </td>
+                              <td className="text-end">
+                                {item.estado !== "cancelado" && (
+                                  <button
+                                    type="button"
+                                    className="btn btn-outline-danger btn-sm"
+                                    onClick={() => handleCancelService(item.id)}
+                                  >
+                                    Cancelar
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <p className="text-muted mb-0">Aún no agregas servicios a esta reserva.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );

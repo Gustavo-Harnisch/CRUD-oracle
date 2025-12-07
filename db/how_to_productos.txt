@@ -1,0 +1,58 @@
+Guía rápida: Productos vinculados a Servicios
+============================================
+Objetivo
+- Gestionar un catálogo de productos (ej.: bata, jabón, toallas) que se puedan asociar a servicios (spa, limpieza, etc.), manteniendo stock y control de uso en reservas.
+- Evitar endpoints directos: solo procedimientos PL/SQL; el backend llama a procs.
+
+Estado actual (ya existe en la BD)
+- Tabla JRGY_PRODUCTO (COD_PRODUCTO PK, NOMBRE_PRODUCTO, TIPO_PRODUCTO, PRECIO_PRODUCTO, CANTIDAD_PRODUCTO, STOCK_PRODUCTO, UMBRAL_ALERTA).
+- Triggers de PK y stock, secuencia SQ_PK_PRODUCTO.
+- Procedimiento legacy CRUD_PRODUCTO (no se usa) y procs modernos JRGY_PRO_PRODUCTO_* (listar/crear/actualizar/borrar) ya agregados.
+- Tablas de stock y ventas (JRGY_MOVIMIENTO_STOCK, JRGY_DETALLE_PEDIDO, JRGY_DETALLE_VENTA) ya referencian productos.
+- Tabla puente JRGY_SERVICIO_PRODUCTO ya creada; procs JRGY_PRO_SERVICIO_PRODUCTO_LISTAR/REEMPLAZAR agregados.
+
+Propuesta de modelo (normalizado)
+- Mantener JRGY_PRODUCTO como catálogo maestro.
+- Crear tabla JRGY_SERVICIO_PRODUCTO para asociar productos a servicios:
+  * COD_SERVICIO (FK JRGY_SERVICIO), COD_PRODUCTO (FK JRGY_PRODUCTO), CANTIDAD_BASE (número sugerido para el servicio), PRECIO_EXTRA (opcional, si el producto tiene sobrecargo).
+  * PK compuesta (COD_SERVICIO, COD_PRODUCTO).
+- (Opcional) Tabla JRGY_RESERVA_SERVICIO_PRODUCTO si se desea registrar qué productos se entregaron por reserva/servicio, para auditoría y rebaja de stock específica.
+- Nueva funcionalidad: alerta de stock. Agregar columna UMBRAL_ALERTA a JRGY_PRODUCTO. Cuando STOCK_PRODUCTO <= UMBRAL_ALERTA, mostrar alerta a admin y sugerir compra reposición. UMBRAL_ALERTA puede ser NULL (sin alerta) o un número (ej. 5).
+
+Procedimientos sugeridos (prefijo JRGY_PRO_PRODUCTO_)
+- JRGY_PRO_PRODUCTO_LISTAR(cur OUT): lista catálogo de productos (incluir UMBRAL_ALERTA y flag ALERTA_ACTIVA = STOCK<=UMBRAL).
+- JRGY_PRO_PRODUCTO_CREAR(p_nombre, p_tipo, p_precio, p_cantidad, p_stock, p_umbral_alerta, p_id OUT).
+- JRGY_PRO_PRODUCTO_ACTUALIZAR(p_id, p_nombre, p_tipo, p_precio, p_cantidad, p_stock, p_umbral_alerta).
+- JRGY_PRO_PRODUCTO_CAMBIAR_STOCK(p_id, p_delta, p_motivo) o reutilizar MOVIMIENTO_STOCK.
+- JRGY_PRO_PRODUCTO_BORRAR(p_id): error si hay movimientos/ventas asociados.
+
+Procedimientos para la relación con servicios
+- JRGY_PRO_SERVICIO_PRODUCTO_LISTAR(p_servicio_id, cur OUT): devuelve productos asociados (nombre, cantidad_base, precio_extra).
+- JRGY_PRO_SERVICIO_PRODUCTO_REEMPLAZAR(p_servicio_id, p_items_json CLOB):
+  * p_items_json = [{"productoId":1,"cantidad":1,"precioExtra":0}, ...]
+  * Borra y recrea las filas de JRGY_SERVICIO_PRODUCTO para el servicio.
+  * Valida que productos existan y que el servicio exista.
+- (Opcional) JRGY_PRO_SERVICIO_PRODUCTO_ADD/DEL si se prefiere operar incrementalmente.
+
+Integración backend/front
+- Backend añadirá rutas /api/products y /api/services/:id/products que llamen solo a los procs anteriores.
+- Front admin: CRUD de productos + selector en servicios para asociar productos (multi-select con cantidades y sobreprecio).
+- Validar rol ADMIN en todas las operaciones de producto/relación.
+
+Roles y comportamiento esperado
+- ADMIN: puede crear/editar/borrar productos, ajustar stock, asociar productos a servicios. Recibe alertas cuando stock <= umbral.
+- EMPLOYEE: solo consultar catálogo y stock; no modifica.
+- USER: no accede a CRUD; solo verá productos incluidos en su servicio/reserva (si se implementa la visualización).
+
+Pasos recomendados para implementar
+1) Añadir columna UMBRAL_ALERTA a JRGY_PRODUCTO.
+2) Crear tabla JRGY_SERVICIO_PRODUCTO (PK compuesta, FKs a servicio y producto).
+3) Crear procs JRGY_PRO_PRODUCTO_* y JRGY_PRO_SERVICIO_PRODUCTO_* (listado, crear, actualizar, borrar, reemplazar relaciones).
+4) Actualizar memoria_ia.txt con los nuevos procs para mantener consistencia IA.
+5) Backend: nuevas rutas products + endpoints de relación en services que llamen a los procs (sin SQL directo).
+6) Front admin: vista de productos (CRUD) y en admin servicios permitir asociar productos con cantidad/extra y mostrar alerta visual cuando STOCK<=UMBRAL.
+
+Notas de diseño
+- Normalizar: productos no dependen de servicios; la relación es N:M en tabla puente.
+- Stock: el enlace servicio-producto no descuenta stock. El descuento de stock ocurre cuando se marca la entrega/consumo (etapa futura con reservas). Para ahora, solo catálogo y asociación.
+- Precios: usar PRECIO_PRODUCTO como base; PRECIO_EXTRA en la relación para sobrecargos por servicio si aplica.

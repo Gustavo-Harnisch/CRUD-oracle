@@ -1,0 +1,40 @@
+Guía rápida: Departamentos (solo admin)
+======================================
+Objetivo
+- Gestionar departamentos/áreas internas: nombre, jefe/responsable, presupuesto/saldo, cantidad de empleados asignados.
+- Solo ADMIN puede crear/editar/eliminar; EMPLOYEE solo consulta; USER sin acceso.
+
+Modelo propuesto
+- Tabla JRGY_DEPARTAMENTO
+  * COD_DEPARTAMENTO (PK)
+  * NOMBRE
+  * JEFE_EMPLEADO_ID (FK a JRGY_EMPLEADO)
+  * PRESUPUESTO (NUMBER) o SALDO_ACTUAL si se controla flujo
+  * FECHA_CREACION
+- Tabla relacional JRGY_DEPARTAMENTO_EMPLEADO (COD_DEPARTAMENTO, COD_EMPLEADO) para asignar empleados.
+  * PK compuesta (COD_DEPARTAMENTO, COD_EMPLEADO), FKs a departamento y empleado.
+
+Procedimientos sugeridos (prefijo JRGY_PRO_DEP_)
+- JRGY_PRO_DEP_LISTAR(cur OUT): devuelve departamentos con nombre, jefe (nombre), empleados_cont, presupuesto/saldo.
+- JRGY_PRO_DEP_CREAR(p_nombre, p_jefe_id, p_presupuesto, p_id OUT).
+- JRGY_PRO_DEP_ACTUALIZAR(p_id, p_nombre, p_jefe_id, p_presupuesto).
+- JRGY_PRO_DEP_BORRAR(p_id): error si tiene empleados asignados (opcional).
+- JRGY_PRO_DEP_ASIGNAR_EMPLEADOS(p_dep_id, p_empleados_json CLOB):
+  * p_empleados_json = [1,2,3] con IDs de empleado; reemplaza asignaciones.
+- JRGY_PRO_DEP_LISTAR_EMPLEADOS(p_dep_id, cur OUT).
+
+Roles y permisos
+- ADMIN: CRUD departamentos, asigna jefe y empleados, ajusta presupuesto.
+- EMPLOYEE: solo lectura (si se expone) para ver su departamento y jefe.
+- USER: sin acceso.
+
+Front/Backend esperado
+- Backend: rutas /api/departments y /api/departments/:id/employees que llamen a los procs anteriores (sin SQL directo).
+- Front admin: nueva página “Departamentos” con:
+  * Formulario crear/editar (nombre, jefe, presupuesto).
+  * Tabla con columnas: Nombre, Jefe, Empleados asignados (conteo), Presupuesto/Saldo, Estado (opcional) y acciones Editar/Eliminar.
+  * Panel lateral/modal para asignar empleados al departamento (multi-select).
+
+Notas
+- Si se maneja “saldo total por departamento”, decidir si se alimenta desde egresos/ingresos o es solo un presupuesto de referencia.
+- Jefe debe ser un empleado con rol EMPLOYEE/ADMIN; validar FK.

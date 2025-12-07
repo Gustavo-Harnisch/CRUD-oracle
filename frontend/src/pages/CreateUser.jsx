@@ -1,10 +1,10 @@
-// src/pages/CrearUsuario.jsx
+// src/pages/CreateUser.jsx
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import UserForm from "../components/UserForm";
 import { createUser } from "../services/userService";
 
-const CrearUsuario = () => {
+const CreateUser = () => {
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
@@ -44,4 +44,4 @@ const CrearUsuario = () => {
   );
 };
 
-export default CrearUsuario;
+export default CreateUser;

@@ -1,0 +1,46 @@
+Guía rápida: Distribuidores/Proveedores y compras
+=================================================
+Objetivo
+- Gestionar proveedores (distribuidores) y las compras de productos para stock, solo para ADMIN/EMPLOYEE. Clientes no interactúan.
+- Registrar pedidos de compra (cabecera + detalle) y reflejarlos en stock.
+
+Estado actual en BD
+- Tablas:
+  * JRGY_PROVEEDOR (COD_PROVEEDOR PK, NOMBRE_PROVEEDOR, DIRECCION_PROVEEDOR, TELEFONO_PROVEEDOR, COD_REGION FK).
+  * JRGY_PEDIDO (cabecera de compra: COD_PEDIDO PK, VALOR_TOTAL, FECHA_PEDIDO, COD_EMPLEADO FK).
+  * JRGY_DETALLE_PEDIDO (COD_PEDIDO, COD_PROVEEDOR, COD_PRODUCTO, NOMBRE_PRODUCTO, CANTIDAD_PRODUCTO, PRECIO_COMPRA, PRECIO_TOTAL) con FKs a PROVEEDOR y PRODUCTO.
+  * JRGY_MOVIMIENTO_STOCK registra movimientos (ENTRADA/SALIDA) por producto.
+- Procs legacy: CRUD_PROVEEDOR, CRUD_PEDIDO/CRUD_DETALLE_PEDIDO y paquetes de pedido, pero no se usan en backend actual.
+
+Modelo propuesto (normalizado)
+- Mantener JRGY_PROVEEDOR como catálogo de distribuidores.
+- Mantener JRGY_PEDIDO/JRGY_DETALLE_PEDIDO como cabecera/detalle de compras; cada detalle liga proveedor + producto.
+- Usar MOVIMIENTO_STOCK para reflejar entradas de compras.
+
+Procedimientos sugeridos (prefijo JRGY_PRO_PROVEEDOR_ / JRGY_PRO_PEDIDO_)
+- Proveedores:
+  * JRGY_PRO_PROVEEDOR_LISTAR(cur OUT)
+  * JRGY_PRO_PROVEEDOR_CREAR(p_nombre, p_dir, p_tel, p_region, p_id OUT)
+  * JRGY_PRO_PROVEEDOR_ACTUALIZAR(p_id, p_nombre, p_dir, p_tel, p_region)
+  * JRGY_PRO_PROVEEDOR_BORRAR(p_id) -> error si tiene pedidos.
+- Compras (cabecera/detalle):
+  * JRGY_PRO_PEDIDO_CREAR(p_empleado_id, p_detalle_json CLOB, p_pedido_id OUT)
+    - p_detalle_json: [{"proveedorId":1,"productoId":2,"nombreProducto":"Bata","cantidad":10,"precioCompra":5000}, ...]
+    - Inserta cabecera, detalles, calcula totales y genera entradas en JRGY_MOVIMIENTO_STOCK; actualiza STOCK_PRODUCTO.
+  * JRGY_PRO_PEDIDO_LISTAR(cur OUT) y JRGY_PRO_PEDIDO_OBTENER(p_id, cur OUT)
+  * (Opcional) JRGY_PRO_PEDIDO_ANULAR(p_id) con reverso de stock si aplica.
+
+Backend/Frontend esperado
+- Rutas /api/providers y /api/purchases que llamen solo a estos procs (sin SQL directo).
+- Front admin: CRUD de proveedores y registro de compras (selecciona productos, cantidades y costos).
+- Front empleado: solo lectura o creación de pedidos según permiso (rol EMPLOYEE puede crear pedidos; ADMIN administra todo).
+
+Roles y permisos
+- ADMIN: CRUD proveedores, registrar y anular compras, ver reportes de compras por proveedor.
+- EMPLOYEE: puede ver proveedores y levantar solicitudes de compra; no borra proveedores ni anula compras.
+- USER: sin acceso.
+
+Notas de diseño
+- VALOR_TOTAL de pedido = suma de precio_compra * cantidad en detalles.
+- Cada detalle puede tener proveedor distinto; si se prefiere un proveedor por pedido, validar que todos los detalles compartan el mismo.
+- Movimientos de stock: usar motivo "PEDIDO <id>" y tipo ENTRADA.

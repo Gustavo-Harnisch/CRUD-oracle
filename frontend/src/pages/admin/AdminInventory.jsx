@@ -1,64 +1,403 @@
-// src/pages/admin/AdminInventory.jsx
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import {
+  listProducts,
+  createProduct,
+  updateProduct,
+  deleteProduct,
+} from "../../services/productService";
+import { useAuth } from "../../context/AuthContext";
+import { PAGE_STATUS, getStatusClasses } from "../../utils/pageStatus";
 
-const inventoryBlocks = [
-  {
-    title: "Habitaciones",
-    description: "Administra disponibilidad, bloqueos y asignaciones a los huéspedes.",
-    actions: ["Actualizar estado", "Asignar limpieza", "Revisar tipos y comodidades"],
-    cta: { label: "Gestionar habitaciones", to: "/admin/rooms" },
-  },
-  {
-    title: "Inventario",
-    description: "Lleva control de ropa de cama, amenities y consumibles por piso.",
-    actions: ["Stock mínimo", "Alertas de reposición", "Historial de movimientos"],
-  },
-  {
-    title: "Mantenimiento",
-    description: "Coordina tareas correctivas y preventivas con responsables internos.",
-    actions: ["Incidencias abiertas", "Calendario técnico", "Proveedores y SLA"],
-  },
-];
+const emptyForm = {
+  nombre: "",
+  tipo: "",
+  precio: 0,
+  stock: 0,
+  umbral: "",
+  estado: "ACTIVO",
+};
 
 const AdminInventory = () => {
+  const { logout } = useAuth();
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [filters, setFilters] = useState({
+    search: "",
+    tipo: "",
+    minPrice: "",
+    maxPrice: "",
+    estado: "",
+    alerta: false,
+  });
+  const [form, setForm] = useState(emptyForm);
+  const [editingId, setEditingId] = useState(null);
+
+  const load = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const data = await listProducts();
+      setProducts(data);
+    } catch (err) {
+      setError("No se pudo cargar el inventario.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  const filtered = useMemo(() => {
+    const minPrice = filters.minPrice === "" ? null : Number(filters.minPrice);
+    const maxPrice = filters.maxPrice === "" ? null : Number(filters.maxPrice);
+    return products.filter((p) => {
+      const s = filters.search
+        ? `${p.nombre} ${p.tipo}`.toLowerCase().includes(filters.search.toLowerCase())
+        : true;
+      const t = filters.tipo ? (p.tipo || "").toLowerCase() === filters.tipo.toLowerCase() : true;
+      const e = filters.estado ? (p.estado || "").toUpperCase() === filters.estado.toUpperCase() : true;
+      const min = minPrice !== null ? Number(p.precio || 0) >= minPrice : true;
+      const max = maxPrice !== null ? Number(p.precio || 0) <= maxPrice : true;
+      const alerta = filters.alerta ? Number(p.stock || 0) <= Number(p.umbral || 0 || -1) : true;
+      return s && t && e && min && max && alerta;
+    });
+  }, [products, filters]);
+
+  const handleEdit = (prod) => {
+    setEditingId(prod.id);
+    setForm({
+      nombre: prod.nombre,
+      tipo: prod.tipo,
+      precio: prod.precio,
+      stock: prod.stock,
+      umbral: prod.umbralAlerta ?? "",
+      estado: prod.estado,
+    });
+  };
+
+  const handleResetForm = () => {
+    setEditingId(null);
+    setForm(emptyForm);
+  };
+
+  const handleSubmit = async () => {
+    setSaving(true);
+    setError("");
+    try {
+      const payload = {
+        nombre: form.nombre,
+        tipo: form.tipo,
+        precio: Number(form.precio),
+        cantidad: Number(form.cantidad || 0),
+        stock: Number(form.stock),
+        umbralAlerta: form.umbral === "" ? null : Number(form.umbral),
+      };
+      if (editingId) {
+        await updateProduct(editingId, payload);
+      } else {
+        await createProduct(payload);
+      }
+      await load();
+      handleResetForm();
+    } catch (err) {
+      const status = err?.response?.status;
+      if (status === 401) {
+        logout();
+        window.location.href = "/login";
+      } else {
+        setError(err?.response?.data?.message || "No se pudo guardar el producto.");
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm("¿Eliminar este producto?")) return;
+    setError("");
+    try {
+      await deleteProduct(id);
+      await load();
+    } catch (err) {
+      const status = err?.response?.status;
+      if (status === 401) {
+        logout();
+        window.location.href = "/login";
+      } else {
+        setError(err?.response?.data?.message || "No se pudo eliminar.");
+      }
+    }
+  };
+
   return (
-    <div className="container py-4">
-      <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-3">
+    <div className="container-xxl py-4">
+      <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4">
         <div>
-          <p className="text-uppercase text-muted mb-1 small">Administración</p>
-          <h1 className="h4 mb-0">Cuartos e inventario</h1>
-          <p className="text-muted small mb-0">
-            Separa la gestión diaria en módulos de habitaciones, inventario y mantenimiento.
-          </p>
+          <p className="text-uppercase text-muted small mb-1">Admin · Inventario</p>
+          <h1 className="h4 mb-1">Productos y stock</h1>
+          <p className="text-muted small mb-0">Conectado a procedimientos de productos.</p>
         </div>
-        <Link to="/admin" className="btn btn-outline-secondary btn-sm mt-3 mt-md-0">
-          Volver al dashboard
-        </Link>
+        <span className={`badge ${getStatusClasses(PAGE_STATUS.LIVE)}`}>{PAGE_STATUS.LIVE}</span>
       </div>
 
-      <div className="row g-3">
-        {inventoryBlocks.map(({ title, description, actions, cta }) => (
-          <div className="col-md-4" key={title}>
-            <div className="card h-100 shadow-sm">
-              <div className="card-body d-flex flex-column">
-                <h5 className="card-title">{title}</h5>
-                <p className="card-text text-muted">{description}</p>
-                <ul className="text-muted small ps-3 mb-3">
-                  {actions.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
-                {cta ? (
-                  <Link to={cta.to} className="btn btn-primary btn-sm align-self-start">
-                    {cta.label}
-                  </Link>
-                ) : (
-                  <span className="text-secondary small">Enlaza aquí tu flujo detallado.</span>
-                )}
+      <div className="row g-3 g-xl-4 align-items-start">
+        <div className="col-lg-5 col-xl-4">
+          <div className="card shadow-sm h-100">
+            <div className="card-body p-4 p-xl-5">
+              <h2 className="h6 mb-4">{editingId ? "Editar producto" : "Nuevo producto"}</h2>
+              <form className="row g-3">
+                <div className="col-12">
+                  <label className="form-label">Nombre</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={form.nombre}
+                    onChange={(e) => setForm((p) => ({ ...p, nombre: e.target.value }))}
+                  />
+                </div>
+                <div className="col-md-6">
+                  <label className="form-label">Tipo</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={form.tipo}
+                    onChange={(e) => setForm((p) => ({ ...p, tipo: e.target.value }))}
+                  />
+                </div>
+                <div className="col-md-6">
+                  <label className="form-label">Precio</label>
+                  <input
+                    type="number"
+                    min="0"
+                    className="form-control"
+                    value={form.precio}
+                    onChange={(e) => setForm((p) => ({ ...p, precio: e.target.value }))}
+                  />
+                </div>
+                <div className="col-md-6">
+                  <label className="form-label">Stock</label>
+                  <input
+                    type="number"
+                    min="0"
+                    className="form-control"
+                    value={form.stock}
+                    onChange={(e) => setForm((p) => ({ ...p, stock: e.target.value }))}
+                  />
+                </div>
+                <div className="col-md-6">
+                  <label className="form-label">Umbral alerta</label>
+                  <input
+                    type="number"
+                    min="0"
+                    className="form-control"
+                    value={form.umbral}
+                    onChange={(e) => setForm((p) => ({ ...p, umbral: e.target.value }))}
+                  />
+                  <small className="text-muted">Muestra warning cuando stock ≤ umbral.</small>
+                </div>
+                <div className="col-md-6">
+                  <label className="form-label">Estado</label>
+                  <select
+                    className="form-select"
+                    value={form.estado}
+                    onChange={(e) => setForm((p) => ({ ...p, estado: e.target.value }))}
+                  >
+                    <option value="ACTIVO">Activo</option>
+                    <option value="INACTIVO">Inactivo</option>
+                  </select>
+                </div>
+                <div className="col-12 d-flex gap-2">
+                  <button className="btn btn-primary" type="button" onClick={handleSubmit} disabled={saving}>
+                    {saving ? "Guardando..." : "Guardar"}
+                  </button>
+                  {editingId && (
+                    <button type="button" className="btn btn-outline-secondary" onClick={handleResetForm}>
+                      Cancelar edición
+                    </button>
+                  )}
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <div className="col-lg-7 col-xl-8">
+          <div className="card shadow-sm h-100">
+            <div className="card-body p-4 p-xl-5">
+              <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
+                <div>
+                  <h2 className="h6 mb-1">Listado</h2>
+                  <p className="text-muted small mb-0">Filtra por tipo, precio, estado o alertas.</p>
+                </div>
+                <div className="d-flex gap-2 flex-wrap">
+                  <button
+                    className="btn btn-sm btn-outline-secondary px-3"
+                    type="button"
+                    onClick={() =>
+                      setFilters({ search: "", tipo: "", estado: "", minPrice: "", maxPrice: "", alerta: false })
+                    }
+                  >
+                    Limpiar filtros
+                  </button>
+                </div>
+              </div>
+
+              <div className="row g-3 mb-4 align-items-end">
+                <div className="col-12 col-lg-4">
+                  <label className="form-label small text-muted mb-1">Buscar</label>
+                  <input
+                    type="search"
+                    className="form-control"
+                    placeholder="Nombre o tipo"
+                    value={filters.search}
+                    onChange={(e) => setFilters((p) => ({ ...p, search: e.target.value }))}
+                  />
+                </div>
+                <div className="col-6 col-lg-2">
+                  <label className="form-label small text-muted mb-1">Tipo</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="amenity"
+                    value={filters.tipo}
+                    onChange={(e) => setFilters((p) => ({ ...p, tipo: e.target.value }))}
+                  />
+                </div>
+                <div className="col-6 col-lg-2">
+                  <label className="form-label small text-muted mb-1">Estado</label>
+                  <select
+                    className="form-select"
+                    value={filters.estado}
+                    onChange={(e) => setFilters((p) => ({ ...p, estado: e.target.value }))}
+                  >
+                    <option value="">Todos</option>
+                    <option value="ACTIVO">Activo</option>
+                    <option value="INACTIVO">Inactivo</option>
+                  </select>
+                </div>
+                <div className="col-6 col-lg-2">
+                  <label className="form-label small text-muted mb-1">Precio mín</label>
+                  <input
+                    type="number"
+                    min="0"
+                    className="form-control"
+                    placeholder="0"
+                    value={filters.minPrice}
+                    onChange={(e) => setFilters((p) => ({ ...p, minPrice: e.target.value }))}
+                  />
+                </div>
+                <div className="col-6 col-lg-2">
+                  <label className="form-label small text-muted mb-1">Precio máx</label>
+                  <input
+                    type="number"
+                    min="0"
+                    className="form-control"
+                    placeholder="100000"
+                    value={filters.maxPrice}
+                    onChange={(e) => setFilters((p) => ({ ...p, maxPrice: e.target.value }))}
+                  />
+                </div>
+                <div className="col-6 col-lg-2">
+                  <div className="form-check mt-4">
+                    <input
+                      className="form-check-input"
+                      type="checkbox"
+                      id="filterAlert"
+                      checked={filters.alerta}
+                      onChange={(e) => setFilters((p) => ({ ...p, alerta: e.target.checked }))}
+                    />
+                    <label className="form-check-label small" htmlFor="filterAlert">
+                      Solo con alerta
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <div className="table-responsive">
+                <table className="table table-striped table-hover align-middle">
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Producto</th>
+                      <th>Tipo</th>
+                      <th>Precio</th>
+                      <th>Stock</th>
+                      <th>Alerta</th>
+                      <th>Estado</th>
+                      <th className="text-end">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {loading && (
+                      <tr>
+                        <td colSpan={8} className="py-3 text-muted">Cargando...</td>
+                      </tr>
+                    )}
+                    {!loading && filtered.map((p) => {
+                      const alerta = Number(p.stock || 0) <= Number(p.umbralAlerta || 0 || -1);
+                      return (
+                        <tr key={p.id} className={alerta ? "table-warning" : ""}>
+                          <td className="py-3">{p.id}</td>
+                          <td className="py-3 fw-semibold">{p.nombre}</td>
+                          <td className="py-3 text-muted">{p.tipo}</td>
+                          <td className="py-3">$ {Number(p.precio || 0).toLocaleString()}</td>
+                          <td className="py-3">{p.stock}</td>
+                          <td className="py-3">
+                            {p.umbralAlerta !== null && p.umbralAlerta !== undefined ? (
+                              <span
+                                className={
+                                  alerta
+                                    ? "badge bg-warning-subtle text-warning border"
+                                    : "badge bg-success-subtle text-success border"
+                                }
+                              >
+                                {alerta ? "Bajo stock" : "OK"}
+                              </span>
+                            ) : (
+                              <span className="text-muted small">—</span>
+                            )}
+                          </td>
+                          <td className="py-3">
+                            <span
+                              className={
+                                (p.estado || "").toUpperCase() === "ACTIVO"
+                                  ? "badge bg-success-subtle text-success border"
+                                  : "badge bg-secondary-subtle text-secondary border"
+                              }
+                            >
+                              {p.estado}
+                            </span>
+                          </td>
+                          <td className="text-end py-3">
+                            <div className="btn-group btn-group-sm">
+                              <button className="btn btn-outline-primary" type="button" onClick={() => handleEditMock(p)}>
+                                Editar
+                              </button>
+                              <button className="btn btn-outline-danger" type="button" onClick={() => handleDelete(p.id)}>
+                                Eliminar
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {!loading && filtered.length === 0 && (
+                      <tr>
+                        <td colSpan={8} className="text-muted small py-3">
+                          Sin resultados.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
-        ))}
+        </div>
       </div>
     </div>
   );

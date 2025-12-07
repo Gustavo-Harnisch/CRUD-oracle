@@ -1,3 +1,4 @@
+const oracledb = require('oracledb');
 const { AppError } = require('../utils/errors');
 const config = require('../config');
 
@@ -20,34 +21,28 @@ function buildNamedPlaceholders(prefix, items) {
 
 async function fetchUserRoles(conn, userId) {
   const res = await conn.execute(
-    `
-      SELECT r.NOMBRE_ROL
-      FROM JRGY_USUARIO_ROL ur
-      INNER JOIN JRGY_ROL r ON r.COD_ROL = ur.COD_ROL
-      WHERE ur.COD_USUARIO = :userId
-    `,
-    { userId }
+    `BEGIN JRGY_PRO_USUARIO_GET(:id, :cursor); END;`,
+    { id: userId, cursor: { dir: oracledb.BIND_OUT, type: oracledb.CURSOR } }
   );
-
-  return (res.rows || []).map((row) => row.NOMBRE_ROL);
+  const cursor = res.outBinds.cursor;
+  const rows = await cursor.getRows(1);
+  await cursor.close();
+  const user = (rows || [])[0];
+  const rolesCsv = user ? user.ROLES : '';
+  return (rolesCsv || '').split(',').filter(Boolean);
 }
 
 async function fetchUserWithRoles(conn, userId) {
   const res = await conn.execute(
-    `
-      SELECT COD_USUARIO, NOMBRE_USUARIO, APELLIDO1_USUARIO, APELLIDO2_USUARIO, EMAIL_USUARIO, TELEFONO_USUARIO
-      FROM JRGY_USUARIO
-      WHERE COD_USUARIO = :id
-    `,
-    { id: userId }
+    `BEGIN JRGY_PRO_USUARIO_GET(:id, :cursor); END;`,
+    { id: userId, cursor: { dir: oracledb.BIND_OUT, type: oracledb.CURSOR } }
   );
-
-  const user = (res.rows || [])[0];
-  if (!user) {
-    return null;
-  }
-
-  const roles = await fetchUserRoles(conn, userId);
+  const cursor = res.outBinds.cursor;
+  const rows = await cursor.getRows(1);
+  await cursor.close();
+  const user = (rows || [])[0];
+  if (!user) return null;
+  const roles = (user.ROLES || '').split(',').filter(Boolean);
 
   return {
     id: user.COD_USUARIO,
@@ -62,29 +57,21 @@ async function fetchUserWithRoles(conn, userId) {
 
 async function fetchUsersWithRoles(conn) {
   const res = await conn.execute(
-    `
-      SELECT COD_USUARIO, NOMBRE_USUARIO, APELLIDO1_USUARIO, APELLIDO2_USUARIO, EMAIL_USUARIO, TELEFONO_USUARIO
-      FROM JRGY_USUARIO
-      ORDER BY COD_USUARIO ASC
-    `
+    `BEGIN JRGY_PRO_USUARIO_LISTAR(:cursor); END;`,
+    { cursor: { dir: oracledb.BIND_OUT, type: oracledb.CURSOR } }
   );
+  const cursor = res.outBinds.cursor;
+  const rows = await cursor.getRows();
+  await cursor.close();
 
-  const users = res.rows || [];
-  if (users.length === 0) {
-    return [];
-  }
-
-  const ids = users.map((u) => u.COD_USUARIO);
-  const rolesMap = await fetchRolesMap(conn, ids);
-
-  return users.map((u) => ({
+  return (rows || []).map((u) => ({
     id: u.COD_USUARIO,
     name: u.NOMBRE_USUARIO,
     apellido1: u.APELLIDO1_USUARIO,
     apellido2: u.APELLIDO2_USUARIO,
     email: u.EMAIL_USUARIO,
     telefono: u.TELEFONO_USUARIO,
-    roles: rolesMap[u.COD_USUARIO] || []
+    roles: (u.ROLES || '').split(',').filter(Boolean)
   }));
 }
 

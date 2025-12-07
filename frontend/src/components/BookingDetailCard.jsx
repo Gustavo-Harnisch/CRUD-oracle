@@ -10,6 +10,21 @@ const statusBadge = (status = "") => {
 const BookingDetailCard = ({ booking, events = [], onClose }) => {
   if (!booking) return null;
 
+  const totalHabitacion = booking.totalHabitacion ?? booking.total_habitacion;
+  const totalServicios = booking.totalServicios ?? booking.total_servicios;
+  const formatDate = (iso) => {
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toLocaleDateString();
+  };
+  const formatRange = (start, end) => {
+    const s = formatDate(start);
+    const e = formatDate(end);
+    if (s && e) return `${s} - ${e}`;
+    return s || e || "";
+  };
+
   return (
     <div className="card shadow-sm mt-3">
       <div className="card-body">
@@ -34,17 +49,23 @@ const BookingDetailCard = ({ booking, events = [], onClose }) => {
           </div>
           <div className="col-md-3">
             <p className="text-muted small mb-1">Fechas</p>
-            <p className="mb-0 fw-semibold">
-              {booking.start} - {booking.end}
-            </p>
+            <p className="mb-0 fw-semibold">{formatRange(booking.start, booking.end)}</p>
           </div>
           <div className="col-md-2">
             <p className="text-muted small mb-1">Huéspedes</p>
             <p className="mb-0 fw-semibold">{booking.guests}</p>
           </div>
           <div className="col-md-2">
+            <p className="text-muted small mb-1">Total hab.</p>
+            <p className="mb-0 fw-semibold">$ {Number(totalHabitacion || booking.total || 0).toLocaleString()}</p>
+          </div>
+          <div className="col-md-2">
+            <p className="text-muted small mb-1">Total servicios</p>
+            <p className="mb-0 fw-semibold">$ {Number(totalServicios || 0).toLocaleString()}</p>
+          </div>
+          <div className="col-md-3">
             <p className="text-muted small mb-1">Total</p>
-            <p className="mb-0 fw-semibold">$ {Number(booking.total || 0).toLocaleString()}</p>
+            <p className="mb-0 fw-bold">$ {Number(booking.total || 0).toLocaleString()}</p>
           </div>
         </div>
         <h3 className="h6 mb-2">Eventos asociados</h3>

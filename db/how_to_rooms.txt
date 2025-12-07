@@ -1,0 +1,35 @@
+Guía rápida: Habitaciones (CRUD + estado)
+========================================
+Objetivo
+- Gestionar el catálogo de habitaciones (número, tipo, capacidad, precio base, estado) mediante procedimientos Oracle, sin SQL directo ni endpoints crudos.
+
+Procedimientos disponibles (ya implementados)
+- JRGY_PRO_HABITACION_LISTAR(cur OUT): lista todas las habitaciones con tipo/estado descriptivo.
+- JRGY_PRO_HAB_OBTENER(p_id, cur OUT): devuelve una habitación.
+- JRGY_PRO_HAB_CREAR(p_numero, p_capacidad, p_precio_base, p_tipo_nombre, p_estado_nombre, p_id OUT)
+  * Errores: -20100 número duplicado; -20102 tipo/estado no encontrado.
+- JRGY_PRO_HAB_ACTUALIZAR(p_id, p_numero, p_capacidad, p_precio_base, p_tipo_nombre, p_estado_nombre)
+  * Errores: -20100 número duplicado; -20102 tipo/estado no encontrado; -20103 no existe.
+- JRGY_PRO_HAB_CAMBIAR_ESTADO(p_id, p_estado_nombre)
+  * Errores: -20102 estado no encontrado; -20103 no existe.
+- JRGY_PRO_HAB_BORRAR(p_id)
+  * Errores: -20104 reservas asociadas; -20103 no existe.
+
+Backend (Node) - pautas
+- Usar solo llamadas a los procs anteriores (ver backend/src/routes/rooms.js). No se permite SQL ad-hoc.
+- Validar token y rol ADMIN en POST/PUT/PATCH/DELETE; GET lista es pública.
+- Manejar códigos de error: 409 duplicado o reservas, 404 no encontrado, 422 tipo/estado inválido.
+
+Frontend (Admin)
+- Página `/admin/rooms`: formulario crear/editar, tabla con filtros, acciones Editar / Activar-Inactivar / Eliminar.
+- Solo ADMIN puede ejecutar acciones; EMPLOYEE/USER solo leen o no ven esta página (ruta protegida).
+
+Roles y permisos
+- ADMIN: CRUD completo de habitaciones, cambio de estado, eliminación (si no hay reservas).
+- EMPLOYEE: puede consultar listado (si se expone) pero no modificar.
+- USER: no accede al CRUD admin; solo ve habitaciones disponibles en flujos de reserva pública.
+
+Notas
+- Estado usa catálogo JRGY_CAT_ESTADO_HABITACION (ej.: ACTIVO, INACTIVO, MANTENCION).
+- Tipo usa catálogo JRGY_CAT_TIPO_HABITACION (ej.: SIMPLE, MATRIMONIAL, CONFORT).
+- Precio base es por noche y se usa en reservas; cambios posteriores no re-calculan reservas ya cerradas.

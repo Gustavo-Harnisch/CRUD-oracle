@@ -7,9 +7,9 @@ const EmployeeHome = () => {
   return (
     <HeroSection
       backgroundImage={employeeHero}
-      title="Panel de empleado"
-      subtitle="Organiza la operación diaria: agenda, clientes y peticiones."
-      primaryLabel="Ver panel diario"
+      title="Dashboard de empleado"
+      subtitle="Organiza check-in, habitaciones y peticiones en un solo lugar."
+      primaryLabel="Ir al dashboard"
       primaryHref="/employee"
       secondaryLabel="Clientes y check-in"
       secondaryHref="/employee/clients"

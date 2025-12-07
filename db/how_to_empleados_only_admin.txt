@@ -1,0 +1,31 @@
+Guía rápida: Empleados (solo gestión por ADMIN)
+==============================================
+Objetivo
+- Definir cómo debe gestionarse el catálogo de empleados (y su relación con usuarios) únicamente por ADMIN. Empleados no pueden autogestionarse.
+
+Modelo existente (BD)
+- Empleados referencian usuarios: JRGY_EMPLEADO (COD_EMPLEADO PK, COD_USUARIO FK, RUT, FECHA_CONTRATO, SUELDO, etc.).
+- Usuarios/roles se manejan por los procs de usuario/rol (ver memoria_ia.txt). Rol EMPLOYEE habilita vistas de empleado.
+
+Procedimientos recomendados
+- Reutilizar procs de usuario para alta/baja y asignar rol EMPLOYEE.
+- Crear procs específicos de empleado si se requiere info laboral:
+  * JRGY_PRO_EMPLEADO_LISTAR(cur OUT)
+  * JRGY_PRO_EMPLEADO_OBTENER(p_id, cur OUT)
+  * JRGY_PRO_EMPLEADO_CREAR(p_usuario_id, p_rut, p_fecha_contrato, p_sueldo_base, p_id OUT)
+  * JRGY_PRO_EMPLEADO_ACTUALIZAR(p_id, p_rut, p_fecha_contrato, p_sueldo_base)
+  * JRGY_PRO_EMPLEADO_BORRAR(p_id) -> cuidado con FKs (pedidos, ventas).
+
+Roles y permisos
+- ADMIN: único que crea/edita/borra empleados y asigna rol EMPLOYEE a usuarios.
+- EMPLOYEE: no puede modificar ni crear empleados; solo usa su cuenta para operar en módulos de empleado.
+- USER: sin acceso.
+
+Front/Backend
+- Backend expone rutas de empleados solo para ADMIN (ProtectedRoute rol ADMIN).
+- Front admin: página `/admin/employees` (CRUD, lista). Empleado no ve esta página.
+
+Notas
+- Cuando se borra un empleado, validar referencias a pedidos/ventas; bloquear si existen o requerir transferencia.
+- Mantener consistencia con tokens/roles: si se desactiva un empleado, remover rol EMPLOYEE del usuario.
+- Sueldo base debe almacenarse como número positivo; definir moneda y si se manejan bonos aparte (no incluido aquí).

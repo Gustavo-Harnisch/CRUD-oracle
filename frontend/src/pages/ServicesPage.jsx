@@ -1,6 +1,7 @@
 // src/pages/ServicesPage.jsx
 import { useEffect, useState } from "react";
-import { fetchExperiences } from "../services/experienceService";
+import { listServices } from "../services/serviceService";
+import { PAGE_STATUS, getStatusClasses } from "../utils/pageStatus";
 
 const baseServices = [
   { title: "Desayuno local", text: "Incluido en la mayoría de las estadías. Café de grano, pan amasado y mermeladas caseras." },
@@ -11,8 +12,16 @@ const baseServices = [
   { title: "Amenities", text: "Set de baño, secador y agua de cortesía en cada habitación." },
 ];
 
+const formatTime = (num) => {
+  if (num === null || num === undefined) return "";
+  const totalMinutes = Math.round(Number(num) * 60);
+  const hh = Math.floor(totalMinutes / 60);
+  const mm = totalMinutes % 60;
+  return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+};
+
 const ServicesPage = () => {
-  const [experiences, setExperiences] = useState([]);
+  const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -21,11 +30,11 @@ const ServicesPage = () => {
       setError("");
       setLoading(true);
       try {
-        const data = await fetchExperiences();
-        setExperiences(data);
+        const data = await listServices();
+        setServices(data);
       } catch (err) {
         console.error(err);
-        setError("No se pudieron cargar las experiencias");
+        setError("No se pudieron cargar los servicios");
       } finally {
         setLoading(false);
       }
@@ -41,7 +50,7 @@ const ServicesPage = () => {
           <h1 className="h3 mb-1">Servicios para cada tipo de viaje</h1>
           <p className="text-muted mb-0">Curamos paquetes y extras para descanso, aventura o trabajo remoto.</p>
         </div>
-        <span className="badge bg-success-subtle text-success border">Live</span>
+        <span className={`badge ${getStatusClasses(PAGE_STATUS.LIVE)}`}>{PAGE_STATUS.LIVE}</span>
       </div>
 
       <div className="row g-3 mb-4">
@@ -61,22 +70,35 @@ const ServicesPage = () => {
       {loading ? <p className="text-muted">Cargando experiencias...</p> : null}
 
       <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-3">
-        <h2 className="h5 mb-0">Experiencias destacadas</h2>
+        <h2 className="h5 mb-0">Servicios destacados</h2>
         <small className="text-muted">Valores referenciales — ajustables según temporada.</small>
       </div>
       <div className="row g-3 mb-4">
-        {experiences.map((exp) => (
-          <div className="col-md-6" key={exp.id}>
+        {services.map((svc) => (
+          <div className="col-md-6" key={svc.id}>
             <div className="card h-100 shadow-sm">
               <div className="card-body d-flex flex-column">
                 <div className="d-flex justify-content-between align-items-start mb-2">
-                  <h5 className="card-title mb-0">{exp.nombre}</h5>
-                  <span className="badge bg-light text-secondary border">{exp.tag || "Disponible"}</span>
+                  <h5 className="card-title mb-0">{svc.nombre}</h5>
+                  <span className="badge bg-light text-secondary border">
+                    {svc.tipo || "Disponible"}
+                  </span>
                 </div>
-                <p className="text-muted mb-2">{exp.descripcion || "Sin descripción"}</p>
+                <p className="text-muted mb-2">{svc.descripcion || "Sin descripción"}</p>
+                {Array.isArray(svc.horarios) && svc.horarios.length > 0 ? (
+                  <div className="d-flex flex-wrap gap-2 mb-2">
+                    {svc.horarios.map((h) => (
+                      <span key={`${svc.id}-${h.id || h.inicio}`} className="badge bg-primary-subtle text-primary border">
+                        {`${formatTime(h.inicio)} - ${formatTime(h.fin)}`}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <small className="text-muted mb-2">Horario flexible</small>
+                )}
                 <div className="mt-auto d-flex justify-content-between align-items-center">
-                  <span className="fw-semibold">$ {Number(exp.precio || 0).toLocaleString()}</span>
-                  <span className="badge bg-success-subtle text-success border">{exp.estado || "Activo"}</span>
+                  <span className="fw-semibold">$ {Number(svc.precio || 0).toLocaleString()}</span>
+                  <span className="badge bg-success-subtle text-success border">{svc.estado || "Activo"}</span>
                 </div>
               </div>
             </div>

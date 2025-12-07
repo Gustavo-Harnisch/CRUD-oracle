@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { fetchReservations, fetchReservationEvents } from "../services/bookingService";
+import { PAGE_STATUS, getStatusClasses } from "../utils/pageStatus";
 
 const parseDate = (value) => {
   if (!value) return null;
@@ -73,8 +74,8 @@ const CustomerOverview = () => {
             <h2 className="h5 mb-0">Estado rápido de tus reservas</h2>
             <p className="text-muted small mb-0">Datos en línea desde la base real.</p>
           </div>
-          <span className="badge bg-success-subtle text-success border d-none d-md-inline">
-            Live
+          <span className={`badge d-none d-md-inline ${getStatusClasses(PAGE_STATUS.LIVE)}`}>
+            {PAGE_STATUS.LIVE}
           </span>
         </div>
 

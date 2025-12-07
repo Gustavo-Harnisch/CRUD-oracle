@@ -15,9 +15,9 @@ import ContactPage from "./pages/ContactPage";
 
 import LoginPage from "./pages/LoginPage";
 import AdminDashboard from "./pages/admin/AdminDashboard";
-import Usuarios from "./pages/Usuarios";
-import CrearUsuario from "./pages/CrearUsuario";
-import EditarUsuario from "./pages/EditarUsuario";
+import AdminUsers from "./pages/AdminUsers";
+import CreateUser from "./pages/CreateUser";
+import EditUser from "./pages/EditUser";
 import NotFoundPage from "./pages/NotFoundPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 import EmployeeDashboard from "./pages/employee/EmployeeDashboard";
@@ -25,19 +25,22 @@ import CustomerProfile from "./pages/customer/CustomerProfile";
 import CustomerReservation from "./pages/customer/CustomerReservation";
 import CustomerBookings from "./pages/customer/CustomerBookings";
 import CustomerBookingEvents from "./pages/customer/CustomerBookingEvents";
-import EmployeeAgenda from "./pages/employee/EmployeeAgenda";
+import CustomerDashboard from "./pages/customer/CustomerDashboard";
 import EmployeeClients from "./pages/employee/EmployeeClients";
 import EmployeeRequests from "./pages/employee/EmployeeRequests";
 import AdminInventory from "./pages/admin/AdminInventory";
 import AdminEmployees from "./pages/admin/AdminEmployees";
-import AdminRates from "./pages/admin/AdminRates";
-import AdminAuditLogs from "./pages/admin/AdminAuditLogs";
-import AdminRequests from "./pages/admin/AdminRequests";
+import EmployeeRooms from "./pages/employee/EmployeeRooms";
+import EmployeeDepartment from "./pages/employee/EmployeeDepartment";
+import EmployeeServices from "./pages/employee/EmployeeServices";
+// Admin pages en uso
 import CustomerHome from "./pages/customer/CustomerHome";
 import EmployeeHome from "./pages/employee/EmployeeHome";
 import AdminHome from "./pages/admin/AdminHome";
 import AdminRooms from "./pages/admin/AdminRooms";
-import AdminExperiences from "./pages/admin/AdminExperiences";
+import AdminServices from "./pages/admin/AdminServices";
+import AdminDepartments from "./pages/admin/AdminDepartments";
+import AdminDistributors from "./pages/admin/AdminDistributors";
 
 const resolveHomePath = (roles = []) => {
   const normalized = Array.isArray(roles) ? roles.map((r) => String(r).toUpperCase()) : [];
@@ -87,6 +90,7 @@ function App() {
           <Route path="/customer/booking-events" element={<CustomerBookingEvents />} />
           <Route path="/customer/profile" element={<CustomerProfile />} />
           <Route path="/customer/reservations" element={<CustomerReservation />} />
+          <Route path="/customer/dashboard" element={<CustomerDashboard />} />
         </Route>
 
         {/* Rutas de empleado */}
@@ -99,9 +103,11 @@ function App() {
         >
           <Route path="/employee/home" element={<EmployeeHome />} />
           <Route path="/employee" element={<EmployeeDashboard />} />
-          <Route path="/employee/agenda" element={<EmployeeAgenda />} />
           <Route path="/employee/clients" element={<EmployeeClients />} />
           <Route path="/employee/requests" element={<EmployeeRequests />} />
+          <Route path="/employee/rooms" element={<EmployeeRooms />} />
+          <Route path="/employee/services" element={<EmployeeServices />} />
+          <Route path="/employee/department" element={<EmployeeDepartment />} />
         </Route>
 
         {/* Rutas de administración */}
@@ -115,15 +121,24 @@ function App() {
           <Route path="/admin/home" element={<AdminHome />} />
           <Route path="/admin" element={<AdminDashboard />} />
           <Route path="/admin/inventory" element={<AdminInventory />} />
-          <Route path="/admin/users" element={<Usuarios />} />
-          <Route path="/admin/users/create" element={<CrearUsuario />} />
-          <Route path="/admin/users/:id/edit" element={<EditarUsuario />} />
+          <Route path="/admin/users" element={<AdminUsers />} />
+          <Route path="/admin/users/create" element={<CreateUser />} />
+          <Route path="/admin/users/:id/edit" element={<EditUser />} />
           <Route path="/admin/employees" element={<AdminEmployees />} />
-          <Route path="/admin/rates" element={<AdminRates />} />
-          <Route path="/admin/audit" element={<AdminAuditLogs />} />
-          <Route path="/admin/requests" element={<AdminRequests />} />
           <Route path="/admin/rooms" element={<AdminRooms />} />
-          <Route path="/admin/experiences" element={<AdminExperiences />} />
+          <Route path="/admin/services" element={<AdminServices />} />
+          <Route path="/admin/departments" element={<AdminDepartments />} />
+        </Route>
+
+        {/* Rutas compartidas admin/empleado (usa layout admin por ahora) */}
+        <Route
+          element={
+            <ProtectedRoute roles={["ADMIN", "EMPLOYEE"]}>
+              <AdminLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route path="/admin/distributors" element={<AdminDistributors />} />
         </Route>
 
         {/* 404 */}

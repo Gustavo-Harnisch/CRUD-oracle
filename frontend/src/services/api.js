@@ -31,4 +31,21 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const status = error?.response?.status;
+    const message = error?.response?.data?.message || "";
+    if (status === 401 && typeof window !== "undefined") {
+      // Token inválido o expirado: limpiar sesión y redirigir a login.
+      localStorage.removeItem(STORAGE_KEY);
+      // Opcional: redirigir automáticamente
+      if (!window.location.pathname.includes("/login")) {
+        window.location.href = "/login";
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
 export default api;

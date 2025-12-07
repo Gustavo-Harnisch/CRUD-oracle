@@ -1,0 +1,93 @@
+Notas de procedimientos (referencia rápida)
+==========================================
+Importante: evitar endpoints/SQL directo y usar exclusivamente procedimientos almacenados para todas las operaciones.
+
+Servicios (catálogo maestro)
+- JRGY_PRO_SERVICIO_LISTAR(p_include_inactive NUMBER, cur OUT SYS_REFCURSOR)
+  * p_include_inactive: 1 para incluir inactivos (solo admin), 0 por defecto.
+- JRGY_PRO_SERVICIO_CREAR(p_nombre, p_descripcion, p_precio, p_tipo, p_estado, p_destacado CHAR, p_orden, p_horarios_json CLOB, p_id OUT)
+  * p_horarios_json: JSON array [{"inicio":12,"fin":15}, ...]; valida 0–23 y fin>=inicio; error -20081 horarios inválidos.
+- JRGY_PRO_SERVICIO_ACTUALIZAR(p_id, p_nombre, p_descripcion, p_precio, p_tipo, p_estado, p_destacado, p_orden, p_horarios_json)
+  * Error -20081 horarios inválidos, -20082 servicio no encontrado.
+- JRGY_PRO_SERVICIO_ELIMINAR(p_id)
+  * Baja lógica (estado=inactivo); error -20083 servicio no encontrado.
+- JRGY_PRO_SERVICIO_CAMBIAR_ESTADO(p_id, p_estado)
+  * Cambia estado a activo/inactivo; error -20082 no encontrado.
+- JRGY_PRO_SERVICIO_BORRAR(p_id)
+  * Borra horarios y servicio; error -20098 si tiene reservas asociadas, -20082 si no existe.
+- Nota: procs validan 0–23 como enteros; backend/frontend fuerzan horas completas (minutos 00) y rechazan minutos distintos mientras se extiende soporte.
+
+Reservas (cabecera)
+- JRGY_PRO_RESERVA_LISTAR(p_user_id, p_es_admin NUMBER, cur OUT SYS_REFCURSOR)
+  * p_es_admin=1 lista todas; 0 solo las del usuario.
+- JRGY_PRO_RESERVA_CREAR(p_user_id, p_hab_id, p_fecha_inicio, p_fecha_fin, p_huespedes, p_id OUT)
+  * Valida capacidad y fechas; error -20090 capacidad excedida, -20091 habitación no encontrada.
+
+Servicios asociados a reserva
+- JRGY_PRO_RESERVA_SERVICIO_LISTAR(p_reserva_id, cur OUT)
+- JRGY_PRO_RESERVA_SERVICIO_ADD(p_reserva_id, p_servicio_id, p_fecha_servicio, p_hora, p_cantidad, p_nota, p_id OUT)
+  * Valida servicio activo, fecha dentro de reserva, hora 0–23 y dentro de horarios si existen; errores -20084 inactivo, -20085 fecha fuera, -20086 hora inválida, -20087 hora fuera de rango, -20088 reserva/servicio no encontrado.
+- JRGY_PRO_RESERVA_SERVICIO_UPD(p_item_id, p_reserva_id, p_fecha_servicio, p_hora, p_cantidad, p_nota, p_estado)
+  * Misma validación; error -20089 item no encontrado.
+- JRGY_PRO_RESERVA_SERVICIO_CANCELAR(p_item_id, p_reserva_id)
+  * Marca cancelado y recalcula totales; error -20089 item no encontrado.
+
+Autenticación / usuarios / roles
+- JRGY_PRO_AUTH_LOGIN(p_email, cur OUT) -> devuelve usuario + hash para validar en app.
+- JRGY_PRO_USUARIO_LISTAR(cur OUT)
+- JRGY_PRO_USUARIO_GET(p_id, cur OUT)
+- JRGY_PRO_USUARIO_CREAR(p_nombre, p_ap1, p_ap2, p_tel, p_email, p_pass_hash, p_roles_json, p_id OUT)
+  * p_roles_json: JSON array ["ADMIN","USER"]; errores -20092 roles inválidos, -20093 email duplicado.
+- JRGY_PRO_USUARIO_ACTUALIZAR(p_id, p_nombre, p_ap1, p_ap2, p_tel, p_email, p_pass_hash, p_roles_json)
+  * Errores -20092 roles inválidos, -20093 email duplicado, -20094 usuario no encontrado.
+- JRGY_PRO_USUARIO_ELIMINAR(p_id) -> error -20094 si no existe.
+- JRGY_PRO_ROL_LISTAR(cur OUT), JRGY_PRO_ROL_CREAR(p_nombre) (-20095 duplicado), JRGY_PRO_ROL_ELIMINAR(p_id) (-20020 no encontrado).
+
+Lecturas varias
+- JRGY_PRO_HABITACION_LISTAR(cur OUT)
+- JRGY_PRO_EXPERIENCIA_LISTAR(cur OUT)
+
+Habitaciones (CRUD)
+- JRGY_PRO_HAB_OBTENER(p_id, cur OUT)
+  * Devuelve habitación con tipo/estado descriptivo.
+- JRGY_PRO_HAB_CREAR(p_numero, p_capacidad, p_precio_base, p_tipo_nombre, p_estado_nombre, p_id OUT)
+  * Errores: -20100 número duplicado; -20102 tipo/estado no encontrado.
+- JRGY_PRO_HAB_ACTUALIZAR(p_id, p_numero, p_capacidad, p_precio_base, p_tipo_nombre, p_estado_nombre)
+  * Errores: -20100 número duplicado; -20102 tipo/estado no encontrado; -20103 no existe.
+- JRGY_PRO_HAB_CAMBIAR_ESTADO(p_id, p_estado_nombre)
+  * Errores: -20102 estado no encontrado; -20103 no existe.
+- JRGY_PRO_HAB_BORRAR(p_id)
+  * Errores: -20104 reservas asociadas; -20103 no existe.
+
+Productos y relación servicio-producto
+- Tabla JRGY_PRODUCTO incluye UMBRAL_ALERTA.
+- JRGY_PRO_PRODUCTO_LISTAR(cur OUT) -> ALERTA_ACTIVA cuando STOCK<=UMBRAL.
+- JRGY_PRO_PRODUCTO_CREAR/ACTUALIZAR/BORRAR (ver Base_de_datos.sql).
+- Tabla JRGY_SERVICIO_PRODUCTO + procs JRGY_PRO_SERVICIO_PRODUCTO_LISTAR/REEMPLAZAR(p_items_json).
+
+Proveedores y compras
+- Proveedores: JRGY_PRO_PROVEEDOR_LISTAR/CREAR/ACTUALIZAR/BORRAR.
+- Pedidos: JRGY_PRO_PEDIDO_CREAR(p_empleado_id, p_detalle_json, p_id OUT) actualiza stock y movimientos; JRGY_PRO_PEDIDO_LISTAR/OBTENER.
+
+Departamentos
+- Tablas JRGY_DEPARTAMENTO y JRGY_DEPARTAMENTO_EMPLEADO.
+- Procs JRGY_PRO_DEP_LISTAR/OBTENER/CREAR/ACTUALIZAR/BORRAR/ASIGNAR_EMPLEADOS.
+
+Empleados
+- Añadido SUELDO_BASE a JRGY_EMPLEADO; procs sugeridos en how_to_empleados_only_admin.
+- JRGY_PRO_EMPLEADO_LISTAR(cur OUT): devuelve empleado, usuario, departamento (usa 'NONE' si es nulo), cargo, sueldo_base, fecha, estado_laboral.
+- JRGY_PRO_EMPLEADO_CREAR(p_usuario_id, p_cargo, p_sueldo_base, p_fecha_contrato, p_dep_id, p_estado_nombre, p_id OUT)
+- JRGY_PRO_EMPLEADO_ACTUALIZAR(p_id, p_cargo, p_sueldo_base, p_fecha_contrato, p_dep_id, p_estado_nombre)
+- JRGY_PRO_EMPLEADO_BORRAR(p_id)
+
+Faltante/pendiente por implementar
+- Ajustar procs de servicio para soportar minutos (hoy validan 0–23 enteros) y documentar nuevo formato.
+- Conectar UI admin para asociar productos a servicios (API ya expuesta /services/:id/products).
+- Conectar UIs demo (inventory/products listo, departamentos/proveedores/pedidos/empleados) a procs en backend según permisos.
+- Vista de solo lectura de servicios para EMPLOYEE si se requiere.
+- Mostrar productos asociados al servicio en la vista cliente, si se desea.
+Solicitudes admin
+- JRGY_PRO_SOLICITUD_CREAR(p_user_id, p_motivo)
+- JRGY_PRO_SOLICITUD_LISTAR(cur OUT)
+- JRGY_PRO_SOLICITUD_RESOLVER(p_id, p_accion, p_aprobador)
+  * p_accion: 'approved' o 'rejected'; errores -20096 ya resuelta, -20097 no encontrada.

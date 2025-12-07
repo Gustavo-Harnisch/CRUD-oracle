@@ -33,15 +33,14 @@ router.post(
 
     await withConnection(async (conn) => {
       const result = await conn.execute(
-        `
-          SELECT COD_USUARIO, NOMBRE_USUARIO, APELLIDO1_USUARIO, APELLIDO2_USUARIO, TELEFONO_USUARIO, EMAIL_USUARIO, CONTRASENA_HASH
-          FROM JRGY_USUARIO
-          WHERE LOWER(EMAIL_USUARIO) = LOWER(:email) AND ROWNUM = 1
-        `,
-        { email }
+        `BEGIN JRGY_PRO_AUTH_LOGIN(:email, :cursor); END;`,
+        { email, cursor: { dir: oracledb.BIND_OUT, type: oracledb.CURSOR } }
       );
+      const cursor = result.outBinds.cursor;
+      const rows = await cursor.getRows(1);
+      await cursor.close();
+      const user = (rows || [])[0];
 
-      const user = (result.rows || [])[0];
       const validPassword =
         user && user.CONTRASENA_HASH && (await bcrypt.compare(password, user.CONTRASENA_HASH));
 
@@ -95,18 +94,10 @@ router.post(
     const telefonoDb = telefono || null;
 
     await withConnection(async (conn) => {
-      const roleIds = await findRoleIds(conn, roleNames);
-      if (!roleIds.length) {
-        throw new AppError('Rol solicitado no existe en catálogo. Reintenta más tarde o contacta al admin.', 422);
-      }
-
       try {
+        const rolesJson = JSON.stringify(roleNames);
         const result = await conn.execute(
-          `
-            INSERT INTO JRGY_USUARIO (NOMBRE_USUARIO, APELLIDO1_USUARIO, APELLIDO2_USUARIO, TELEFONO_USUARIO, EMAIL_USUARIO, CONTRASENA_HASH, COD_ESTADO_USUARIO)
-            VALUES (:name, :ap1, :ap2, :tel, :email, :passwordHash, :estado)
-            RETURNING COD_USUARIO INTO :id
-          `,
+          `BEGIN JRGY_PRO_USUARIO_CREAR(:name, :ap1, :ap2, :tel, :email, :passwordHash, :rolesJson, :id); END;`,
           {
             name,
             ap1: apellido1,
@@ -114,24 +105,19 @@ router.post(
             tel: telefonoDb,
             email,
             passwordHash,
-            estado: estadoActivo,
+            rolesJson,
             id: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER }
           },
-          { autoCommit: false }
+          { autoCommit: true }
         );
 
         const newId = result.outBinds.id[0];
-        await assignRoles(conn, newId, roleIds);
-        await conn.commit();
-
         const user = await fetchUserWithRoles(conn, newId);
         const token = await generateToken(conn, newId);
         res.status(201).json({ token, user });
       } catch (err) {
-        await conn.rollback();
-        if (err && err.errorNum === 1) {
-          throw new AppError('El correo ya está registrado', 409);
-        }
+        if (err.errorNum === 20092) throw new AppError('Rol solicitado no existe en catálogo.', 422);
+        if (err.errorNum === 20093) throw new AppError('El correo ya está registrado', 409);
         throw err;
       }
     });

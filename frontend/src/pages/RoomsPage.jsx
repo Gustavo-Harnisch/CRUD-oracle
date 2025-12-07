@@ -1,6 +1,7 @@
 // src/pages/RoomsPage.jsx
 import { useEffect, useState } from "react";
 import { fetchRooms } from "../services/roomService";
+import { PAGE_STATUS, getStatusClasses } from "../utils/pageStatus";
 
 const RoomsPage = () => {
   const [rooms, setRooms] = useState([]);
@@ -32,7 +33,7 @@ const RoomsPage = () => {
           <h1 className="h4 mb-0">Catálogo de habitaciones</h1>
           <p className="text-muted small mb-0">Datos en línea desde la base real.</p>
         </div>
-        <span className="badge bg-success-subtle text-success border">Live</span>
+        <span className={`badge ${getStatusClasses(PAGE_STATUS.LIVE)}`}>{PAGE_STATUS.LIVE}</span>
       </div>
 
       {error && <div className="alert alert-danger">{error}</div>}

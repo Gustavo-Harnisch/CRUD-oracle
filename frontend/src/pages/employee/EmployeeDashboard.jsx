@@ -1,66 +1,103 @@
 // src/pages/employee/EmployeeDashboard.jsx
 import { Link } from "react-router-dom";
+import { useMemo } from "react";
 import { useAuth } from "../../context/AuthContext";
 
-const employeeCards = [
-  {
-    id: "agenda",
-    title: "Agenda y eventos",
-    text: "Organiza check-ins, check-outs y bloqueos diarios.",
-    linkHref: "/employee/agenda",
-    linkLabel: "Ir a agenda",
-  },
+const statCards = [
+  { id: "checkins", label: "Check-ins hoy", value: 12, helper: "+2 vs ayer" },
+  { id: "checkouts", label: "Salidas programadas", value: 7, helper: "3 late check-out" },
+  { id: "requests", label: "Peticiones abiertas", value: 9, helper: "2 urgentes" },
+  { id: "oos", label: "Rooms fuera de servicio", value: 3, helper: "Revisión y limpieza" },
+];
+
+const employeeSections = [
   {
     id: "clients",
-    title: "Clientes y check-in",
-    text: "Consulta llegadas, salidas y asignaciones pendientes.",
+    title: "Check-in y clientes",
+    text: "Coordina llegadas, salidas y asignaciones sin saltar a otro módulo.",
+    bullets: ["Llegadas confirmadas y en espera", "Late check-out y VIPs", "Notas de operación por habitación"],
     linkHref: "/employee/clients",
-    linkLabel: "Ver clientes",
+    linkLabel: "Abrir check-in",
   },
   {
     id: "requests",
     title: "Peticiones de huéspedes",
-    text: "Centraliza solicitudes y asigna responsables.",
+    text: "Centraliza tickets, urgencias y responsables en un solo tablero.",
+    bullets: ["Prioridad y SLA", "Asignación al equipo", "Seguimiento de escalados"],
     linkHref: "/employee/requests",
-    linkLabel: "Gestionar peticiones",
+    linkLabel: "Gestionar tickets",
   },
   {
     id: "rooms",
-    title: "Habitaciones",
-    text: "Revisa disponibilidad y tarifas para apoyar reservas.",
-    linkHref: "/rooms",
-    linkLabel: "Ver habitaciones",
+    title: "Habitaciones (ops)",
+    text: "Visibilidad operativa: ocupación, bloqueos y queue de limpieza.",
+    bullets: ["Ocupadas vs disponibles", "Fuera de servicio", "Notas para housekeeping"],
+    linkHref: "/employee/rooms",
+    linkLabel: "Ver rooms",
   },
   {
-    id: "contact",
-    title: "Contacto rápido",
-    text: "Envíanos feedback o reporta incidencias internas.",
-    linkHref: "/contact",
-    linkLabel: "Ir a contacto",
+    id: "department",
+    title: "Mi departamento",
+    text: "Equipo, turnos y objetivos en marcha. Mantén a todos alineados.",
+    bullets: ["Responsable y extensión", "Turnos activos", "Pendientes clave"],
+    linkHref: "/employee/department",
+    linkLabel: "Ver detalle",
     variant: "outline-primary",
   },
 ];
 
 const EmployeeDashboard = () => {
   const { user } = useAuth();
+  const firstName = useMemo(() => {
+    if (!user?.name) return "equipo";
+    const [name] = user.name.split(" ");
+    return name || "equipo";
+  }, [user?.name]);
 
   return (
     <div className="container py-4">
-      <div className="mb-4">
-        <p className="text-uppercase text-muted mb-1">Panel de empleado</p>
-        <h1 className="h4 mb-0">Hola, {user?.name || "Equipo"}</h1>
-        <p className="text-muted small">
-          Accede rápido a habitaciones, servicios y gestión interna.
-        </p>
+      <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
+        <div>
+          <p className="text-uppercase text-muted mb-1 small">Empleado</p>
+          <h1 className="h4 mb-1">Dashboard operativo</h1>
+          <p className="text-muted small mb-0">Hola, {firstName}. Revisa el estado del día y entra a cada módulo.</p>
+        </div>
+        <div className="d-flex gap-2">
+          <Link to="/employee/clients" className="btn btn-primary btn-sm">
+            Check-in rápido
+          </Link>
+          <Link to="/employee/requests" className="btn btn-outline-secondary btn-sm">
+            Ver peticiones
+          </Link>
+        </div>
+      </div>
+
+      <div className="row g-3 mb-4">
+        {statCards.map((card) => (
+          <div className="col-6 col-md-3" key={card.id}>
+            <div className="card shadow-sm h-100">
+              <div className="card-body">
+                <p className="text-uppercase text-muted small mb-1">{card.label}</p>
+                <h3 className="h4 mb-1">{card.value}</h3>
+                <p className="text-success small mb-0">{card.helper}</p>
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
 
       <div className="row g-3">
-        {employeeCards.map((card) => (
-          <div className="col-md-4" key={card.id}>
+        {employeeSections.map((card) => (
+          <div className="col-md-6 col-xl-3" key={card.id}>
             <div className="card h-100 shadow-sm">
               <div className="card-body d-flex flex-column">
                 <h5 className="card-title">{card.title}</h5>
-                <p className="card-text text-muted flex-grow-1">{card.text}</p>
+                <p className="card-text text-muted">{card.text}</p>
+                <ul className="text-muted small ps-3 flex-grow-1">
+                  {card.bullets.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
                 <Link
                   to={card.linkHref}
                   className={`btn btn-${card.variant || "primary"} btn-sm align-self-start`}

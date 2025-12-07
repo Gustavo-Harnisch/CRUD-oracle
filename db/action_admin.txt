@@ -1,0 +1,15 @@
+Acciones solicitadas (admin/front)
+=================================
+- Eliminar páginas sin funcionalidad real (estáticas o sin backend). Ejemplo: experiencias (admin), tarifas/promos.
+- Usuarios: mejorar (pendiente especificar alcance).
+- Empleados: crear guía how_to_empleados_only_admin (solo gestión por ADMIN).
+- Solicitudes: mover a auditorías/logs (stand by).
+- Auditorías y logs: en stand by.
+- Tarifas y promos: eliminar por falta de implementación.
+
+Pendiente definir:
+- Alcance de “mejorar usuarios” (campos, flujos).
+- Lista exacta de rutas/componentes a retirar y limpieza de menú.
+
+Hecho:
+- Se retiraron los placeholders admin AdminExperiences.jsx y AdminRates.jsx (no tenían backend asociado).

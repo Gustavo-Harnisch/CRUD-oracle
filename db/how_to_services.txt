@@ -1,0 +1,45 @@
+Guía rápida: Servicios con horarios y estado
+===========================================
+Objetivo
+- Administrar el catálogo de servicios (spa, limpieza, tours) con horarios opcionales, precios y estado, usando exclusivamente procedimientos Oracle.
+
+Procedimientos disponibles (ya implementados)
+- JRGY_PRO_SERVICIO_LISTAR(p_include_inactive, cur OUT)
+  * p_include_inactive=1 para admins; 0 para público.
+- JRGY_PRO_SERVICIO_OBTENER(p_id, cur_serv OUT, cur_hor OUT): devuelve servicio y horarios.
+- JRGY_PRO_SERVICIO_CREAR(p_nombre, p_descripcion, p_precio, p_tipo, p_estado, p_destacado, p_orden, p_horarios_json, p_id OUT)
+  * p_horarios_json: JSON [{"inicio":12,"fin":15}, ...]; valida 0–23 y fin>=inicio; error -20081 horarios inválidos.
+- JRGY_PRO_SERVICIO_ACTUALIZAR(p_id, ... mismos campos ..., p_horarios_json)
+  * Errores: -20081 horarios inválidos; -20082 no encontrado.
+- JRGY_PRO_SERVICIO_CAMBIAR_ESTADO(p_id, p_estado)
+  * Estado: activo/inactivo; error -20082 no encontrado.
+- JRGY_PRO_SERVICIO_ELIMINAR(p_id)
+  * Baja lógica (estado inactivo); error -20083 no encontrado.
+- JRGY_PRO_SERVICIO_BORRAR(p_id)
+  * Borra horarios/servicio; error -20098 si tiene reservas asociadas; -20082 no encontrado.
+- JRGY_PRO_SERVICIO_HORARIOS_LISTAR(cur OUT): lista horarios de todos los servicios (para componer respuestas).
+- Reservas y servicios de reserva usan otros procs (ver memoria_ia.txt) para validar fecha/hora dentro de reserva y estado activo.
+
+Backend (Node) - pautas
+- Rutas `/api/services` usan solo estos procs (ver backend/src/routes/services.js).
+- Validar token y rol ADMIN en crear/editar/cambiar estado/borrar; GET es público y opcionalmente incluye inactivos si admin.
+- Mapear errores Oracle a HTTP: 400 datos inválidos, 404 no encontrado, 409 conflicto (p.ej. reservas vinculadas).
+- Validación previa: horarios deben ser horas completas (minutos 00) entre 0–23 y fin>=inicio; rechazar minutos mientras los procs no soportan decimales.
+
+Frontend (Admin)
+- Página `/admin/services`: formulario con nombre/descr./tipo/precio/estado/destacado/orden y horarios; listado con filtros por nombre/tipo/precio/hora, acciones Editar / Activar-Inactivar / Eliminar.
+- Inputs de horario restringidos a HH:00 (step 1h) y muestran error si se ingresan minutos ≠ 00 para alinearse con los procs actuales.
+- Solo ADMIN puede ejecutar acciones; EMPLOYEE/USER no acceden al CRUD admin.
+
+Frontend (Employee)
+- Vista solo lectura `/employee/services`: lista servicios activos con filtros básicos (buscar, tipo, hora) y muestra horarios/flags destacados.
+
+Roles y permisos
+- ADMIN: CRUD completo, horarios, estado, eliminación (con restricciones de reservas).
+- EMPLOYEE: solo lectura si se expone; no modifica.
+- USER: ve servicios activos en la web pública y puede añadir a su reserva vía flujos de reserva (validado por procs de reserva-servicio).
+
+Notas
+- Orden controla prioridad visual: números bajos aparecen primero.
+- Destacado es un flag (Y/N) para destacar en UI pública.
+- Horarios vacíos => servicio disponible a cualquier hora (validación en procs de reserva-servicio).

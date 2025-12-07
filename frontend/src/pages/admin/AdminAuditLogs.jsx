@@ -1,4 +1,5 @@
 // src/pages/admin/AdminAuditLogs.jsx
+import { PAGE_STATUS, getStatusClasses } from "../../utils/pageStatus";
 const sampleLogs = [
   {
     id: 1,
@@ -43,7 +44,7 @@ const AdminAuditLogs = () => {
         <div className="card-body">
           <div className="d-flex justify-content-between align-items-center mb-2">
             <h2 className="h6 mb-0">Últimos movimientos</h2>
-            <span className="badge bg-light text-secondary border">Demo</span>
+            <span className={`badge ${getStatusClasses(PAGE_STATUS.EDITING)}`}>{PAGE_STATUS.EDITING}</span>
           </div>
           <div className="table-responsive">
             <table className="table table-sm align-middle mb-0">

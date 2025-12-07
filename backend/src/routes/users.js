@@ -10,12 +10,7 @@ const {
   validateRoles,
   normalizeRolesInput
 } = require('../utils/validators');
-const {
-  fetchUsersWithRoles,
-  fetchUserWithRoles,
-  findRoleIds,
-  assignRoles
-} = require('../services/userService');
+const { fetchUsersWithRoles, fetchUserWithRoles } = require('../services/userService');
 const { extractToken, requireUserFromToken } = require('../services/authService');
 
 const router = express.Router();
@@ -25,7 +20,22 @@ router.get(
   asyncHandler(async (req, res) => {
     await withConnection(async (conn) => {
       await requireUserFromToken(conn, extractToken(req), true);
-      const users = await fetchUsersWithRoles(conn);
+      const result = await conn.execute(
+        `BEGIN JRGY_PRO_USUARIO_LISTAR(:cursor); END;`,
+        { cursor: { dir: oracledb.BIND_OUT, type: oracledb.CURSOR } }
+      );
+      const cursor = result.outBinds.cursor;
+      const rows = await cursor.getRows();
+      await cursor.close();
+      const users = (rows || []).map((u) => ({
+        id: u.COD_USUARIO,
+        name: u.NOMBRE_USUARIO,
+        apellido1: u.APELLIDO1_USUARIO,
+        apellido2: u.APELLIDO2_USUARIO,
+        email: u.EMAIL_USUARIO,
+        telefono: u.TELEFONO_USUARIO,
+        roles: (u.ROLES || '').split(',').filter(Boolean)
+      }));
       res.json(users);
     });
   })
@@ -37,11 +47,24 @@ router.get(
     const userId = Number(req.params.id);
     await withConnection(async (conn) => {
       await requireUserFromToken(conn, extractToken(req), true);
-      const user = await fetchUserWithRoles(conn, userId);
-      if (!user) {
-        throw new AppError('Usuario no encontrado', 404);
-      }
-      res.json(user);
+      const result = await conn.execute(
+        `BEGIN JRGY_PRO_USUARIO_GET(:id, :cursor); END;`,
+        { id: userId, cursor: { dir: oracledb.BIND_OUT, type: oracledb.CURSOR } }
+      );
+      const cursor = result.outBinds.cursor;
+      const rows = await cursor.getRows(1);
+      await cursor.close();
+      const user = (rows || [])[0];
+      if (!user) throw new AppError('Usuario no encontrado', 404);
+      res.json({
+        id: user.COD_USUARIO,
+        name: user.NOMBRE_USUARIO,
+        apellido1: user.APELLIDO1_USUARIO,
+        apellido2: user.APELLIDO2_USUARIO,
+        email: user.EMAIL_USUARIO,
+        telefono: user.TELEFONO_USUARIO,
+        roles: (user.ROLES || '').split(',').filter(Boolean)
+      });
     });
   })
 );
@@ -74,18 +97,10 @@ router.post(
 
     await withConnection(async (conn) => {
       await requireUserFromToken(conn, extractToken(req), true);
-      const roleIds = await findRoleIds(conn, roleNames);
-      if (!roleIds.length) {
-        throw new AppError('Rol solicitado no existe en catálogo. Reintenta más tarde o revisa los roles disponibles.', 422);
-      }
-
       try {
+        const rolesJson = JSON.stringify(roleNames);
         const result = await conn.execute(
-          `
-            INSERT INTO JRGY_USUARIO (NOMBRE_USUARIO, APELLIDO1_USUARIO, APELLIDO2_USUARIO, TELEFONO_USUARIO, EMAIL_USUARIO, CONTRASENA_HASH, COD_ESTADO_USUARIO)
-            VALUES (:name, :ap1, :ap2, :tel, :email, :passwordHash, :estado)
-            RETURNING COD_USUARIO INTO :id
-          `,
+          `BEGIN JRGY_PRO_USUARIO_CREAR(:name, :ap1, :ap2, :tel, :email, :passwordHash, :rolesJson, :id); END;`,
           {
             name,
             ap1: apellido1,
@@ -93,21 +108,20 @@ router.post(
             tel: telefonoDb,
             email,
             passwordHash,
-            estado: estadoActivo,
+            rolesJson,
             id: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER }
           },
-          { autoCommit: false }
+          { autoCommit: true }
         );
 
         const newId = result.outBinds.id[0];
-        await assignRoles(conn, newId, roleIds);
-        await conn.commit();
-
         const user = await fetchUserWithRoles(conn, newId);
         res.status(201).json(user);
       } catch (err) {
-        await conn.rollback();
-        if (err && err.errorNum === 1) {
+        if (err.errorNum === 20092) {
+          throw new AppError('Rol solicitado no existe en catálogo.', 422);
+        }
+        if (err.errorNum === 20093) {
           throw new AppError('El correo ya está registrado', 409);
         }
         throw err;
@@ -140,11 +154,6 @@ router.put(
 
     await withConnection(async (conn) => {
       await requireUserFromToken(conn, extractToken(req), true);
-      const roleIds = await findRoleIds(conn, roleNames);
-      if (!roleIds.length) {
-        throw new AppError('Rol solicitado no existe en catálogo. Reintenta más tarde o revisa los roles disponibles.', 422);
-      }
-
       const params = {
         id: userId,
         name,
@@ -154,36 +163,20 @@ router.put(
         email
       };
 
-      let setClause =
-        'NOMBRE_USUARIO = :name, APELLIDO1_USUARIO = :ap1, APELLIDO2_USUARIO = :ap2, TELEFONO_USUARIO = :tel, EMAIL_USUARIO = :email';
-      if (password) {
-        params.passwordHash = await bcrypt.hash(password, 10);
-        setClause += ', CONTRASENA_HASH = :passwordHash';
-      }
+      const passwordHash = password ? await bcrypt.hash(password, 10) : null;
 
       try {
-        const result = await conn.execute(
-          `UPDATE JRGY_USUARIO SET ${setClause} WHERE COD_USUARIO = :id`,
-          params
+        const rolesJson = JSON.stringify(roleNames);
+        await conn.execute(
+          `BEGIN JRGY_PRO_USUARIO_ACTUALIZAR(:id, :name, :ap1, :ap2, :tel, :email, :passHash, :rolesJson); END;`,
+          { ...params, passHash: passwordHash, rolesJson }
         );
-
-        if (!result.rowsAffected) {
-          throw new AppError('Usuario no encontrado', 404);
-        }
-
-        await assignRoles(conn, userId, roleIds, true);
-        await conn.commit();
-
         const user = await fetchUserWithRoles(conn, userId);
         res.json(user);
       } catch (err) {
-        await conn.rollback();
-        if (err instanceof AppError) {
-          throw err;
-        }
-        if (err && err.errorNum === 1) {
-          throw new AppError('El correo ya está registrado', 409);
-        }
+        if (err.errorNum === 20092) throw new AppError('Rol solicitado no existe en catálogo.', 422);
+        if (err.errorNum === 20093) throw new AppError('El correo ya está registrado', 409);
+        if (err.errorNum === 20094) throw new AppError('Usuario no encontrado', 404);
         throw err;
       }
     });
@@ -196,15 +189,17 @@ router.delete(
     const userId = Number(req.params.id);
     await withConnection(async (conn) => {
       await requireUserFromToken(conn, extractToken(req), true);
-      const result = await conn.execute('DELETE FROM JRGY_USUARIO WHERE COD_USUARIO = :id', {
-        id: userId
-      });
-
-      if (!result.rowsAffected) {
-        throw new AppError('Usuario no encontrado', 404);
+      try {
+        await conn.execute(
+          `BEGIN JRGY_PRO_USUARIO_ELIMINAR(:id); END;`,
+          { id: userId },
+          { autoCommit: true }
+        );
+        res.json({ message: 'Usuario eliminado' });
+      } catch (err) {
+        if (err.errorNum === 20094) throw new AppError('Usuario no encontrado', 404);
+        throw err;
       }
-
-      res.json({ message: 'Usuario eliminado' });
     });
   })
 );

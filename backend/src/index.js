@@ -15,7 +15,7 @@ async function bootstrap() {
   app.use(
     cors({
       origin: config.corsOrigin,
-      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+      methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
       allowedHeaders: ['Content-Type', 'Authorization'],
       credentials: true
     })

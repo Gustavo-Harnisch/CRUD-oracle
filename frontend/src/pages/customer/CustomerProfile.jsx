@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import DemoActionToast from "../../components/DemoActionToast";
+import { PAGE_STATUS, getStatusClasses } from "../../utils/pageStatus";
 
 const CustomerProfile = () => {
   const { user } = useAuth();
@@ -82,7 +83,9 @@ const CustomerProfile = () => {
                   <p className="text-uppercase text-muted small mb-1">Datos de la cuenta</p>
                   <h2 className="h6 mb-0">Contacto y facturación</h2>
                 </div>
-                <span className="badge bg-light text-secondary border border-light-subtle">DEMO</span>
+                <span className={`badge ${getStatusClasses(PAGE_STATUS.EDITING)}`}>
+                  {PAGE_STATUS.EDITING}
+                </span>
               </div>
 
               <div className="row g-3">

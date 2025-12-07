@@ -2,13 +2,14 @@
 import HeroSection from "../../components/HeroSection";
 import CustomerOverview from "../../components/CustomerOverview";
 import { useAuth } from "../../context/AuthContext";
+import { PAGE_STATUS, getStatusClasses } from "../../utils/pageStatus";
 
 const customerHero = "/customer-hero.jpg";
 
 const quickActions = [
   { title: "Mis reservas", text: "Revisa o cancela tus reservas activas.", href: "/customer/bookings", variant: "primary" },
   { title: "Nueva reserva", text: "Cotiza fechas y extras en pocos pasos.", href: "/customer/reservations", variant: "outline-primary" },
-  { title: "Eventos de reserva", text: "Agrega cenas, traslados o decoraciones.", href: "/customer/booking-events", variant: "outline-secondary" },
+  { title: "Servicios de reserva", text: "Agrega cenas, traslados o decoraciones.", href: "/customer/booking-events", variant: "outline-secondary" },
   { title: "Perfil", text: "Actualiza datos de contacto y preferencias.", href: "/customer/profile", variant: "outline-secondary" },
   { title: "Ofertas y experiencias", text: "Descubre paquetes y actividades.", href: "/services", variant: "outline-secondary" },
 ];
@@ -38,9 +39,9 @@ const CustomerHome = () => {
           <div>
             <p className="text-uppercase text-muted small mb-1">Panel rápido</p>
             <h2 className="h5 mb-0">Accesos para cliente</h2>
-            <p className="text-muted small mb-0">Accede a reservas, eventos y servicios con datos reales.</p>
+            <p className="text-muted small mb-0">Accede a reservas, servicios y contacto con datos reales.</p>
           </div>
-          <span className="badge bg-success-subtle text-success border">Live</span>
+          <span className={`badge ${getStatusClasses(PAGE_STATUS.LIVE)}`}>{PAGE_STATUS.LIVE}</span>
         </div>
 
         <div className="row g-3">
