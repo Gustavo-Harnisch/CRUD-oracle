@@ -56,16 +56,16 @@ const ServicesPage = () => {
           <div className="row align-items-center g-4">
             <div className="col-lg-7">
               <span className="services-pill text-uppercase">Servicios y experiencias</span>
-              <h1 className="display-6 fw-bold text-white mb-3">Arma tu estadía con extras curados</h1>
+              <h1 className="display-6 fw-bold text-white mb-3">Elige paquetes listos para tu estadía</h1>
               <p className="lead text-white-50 mb-4">
-                Suma transporte, desayunos tempranos, guías locales y detalles premium. Coordinamos horarios y proveedores por ti.
+                Paquetes armados por el staff: transporte, desayunos tempranos, guías locales y detalles premium. Nosotros coordinamos horarios e insumos.
               </p>
               <div className="d-flex flex-wrap gap-2">
                 <a className="btn btn-light fw-semibold px-4" href="/rooms">
-                  Reservar con extras
+                  Ver habitaciones
                 </a>
                 <a className="btn btn-outline-light px-4" href="/customer/booking-events">
-                  Agregar servicios a mi reserva
+                  Solicitar un paquete
                 </a>
               </div>
             </div>
@@ -139,9 +139,9 @@ const ServicesPage = () => {
         <section className="mb-4">
           <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-3 gap-2">
             <div>
-              <p className="text-uppercase text-muted small mb-1">Catálogo a la carta</p>
-              <h2 className="h5 mb-1">Servicios destacados</h2>
-              <p className="text-muted small mb-0">Valores referenciales — ajustables según temporada.</p>
+              <p className="text-uppercase text-muted small mb-1">Paquetes listos</p>
+              <h2 className="h5 mb-1">Extras destacados</h2>
+              <p className="text-muted small mb-0">Armados por el equipo; valores referenciales, ajustables según temporada.</p>
             </div>
             <div className="d-flex flex-column text-md-end">
               <span className="badge bg-primary-subtle text-primary border align-self-start align-self-md-end">
@@ -192,15 +192,15 @@ const ServicesPage = () => {
                         <small className="text-muted mb-3 d-block">Horario flexible según tu itinerario.</small>
                       )}
 
-                      <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 pt-3 border-top">
-                        <div className="d-flex flex-wrap gap-2 align-items-center">
-                          <span className="badge bg-light text-secondary border">Coordinación inmediata</span>
-                          <span className="badge bg-light text-secondary border">Equipo local</span>
+                        <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 pt-3 border-top">
+                          <div className="d-flex flex-wrap gap-2 align-items-center">
+                            <span className="badge bg-light text-secondary border">Coordinación inmediata</span>
+                          <span className="badge bg-light text-secondary border">Paquete armado por staff</span>
+                          </div>
+                          <a className="btn btn-outline-primary btn-sm" href="/customer/booking-events">
+                          Solicitar paquete
+                          </a>
                         </div>
-                        <a className="btn btn-outline-primary btn-sm" href="/customer/booking-events">
-                          Gestionar
-                        </a>
-                      </div>
                     </div>
                   </div>
                 );

@@ -11,6 +11,7 @@ export const STATUS_CLASSES = {
 };
 
 const STATUS_RULES = [
+  { match: (path) => path === "/" || path === "", status: PAGE_STATUS.LIVE },
   { match: (path) => path.startsWith("/customer/dashboard"), status: PAGE_STATUS.LIVE },
   { match: (path) => path.startsWith("/customer/booking-events"), status: PAGE_STATUS.LIVE },
   { match: (path) => path.startsWith("/customer/profile"), status: PAGE_STATUS.LIVE },

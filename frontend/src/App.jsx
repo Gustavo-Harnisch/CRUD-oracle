@@ -110,6 +110,17 @@ function App() {
           <Route path="/employee/department" element={<EmployeeDepartment />} />
         </Route>
 
+        {/* Ruta solo empleado para gestión de paquetes */}
+        <Route
+          element={
+            <ProtectedRoute roles={["EMPLOYEE"]}>
+              <MainLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route path="/employee/packages" element={<AdminPackages />} />
+        </Route>
+
         {/* Rutas de administración */}
         <Route
           element={
@@ -127,7 +138,6 @@ function App() {
           <Route path="/admin/employees" element={<AdminEmployees />} />
           <Route path="/admin/rooms" element={<AdminRooms />} />
           <Route path="/admin/services" element={<AdminServices />} />
-          <Route path="/admin/packages" element={<AdminPackages />} />
           <Route path="/admin/departments" element={<AdminDepartments />} />
           <Route path="/admin/reports" element={<AdminReports />} />
         </Route>

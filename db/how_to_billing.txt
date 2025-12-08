@@ -3,12 +3,20 @@ Guía rápida: Billing / Facturación y pagos
 Objetivo
 - Normalizar cómo se emiten comprobantes (boleta/factura/recibo) para reservas y ventas, registrando pagos y vínculos al origen solo mediante procedimientos PL/SQL.
 - Evitar doble conteo entre totales de reserva/venta y pagos (ver how_to_balance) y dejar trazabilidad de medio de pago y folio.
+- Dejar la base para estadísticas/dashboards de facturación: totales emitidos, cobrados vs. pendientes, desglose por modo de pago, tipo de documento y origen (reserva/venta).
 
 Estado actual en BD
 - Pagos de habitación: tablas JRGY_PAGO_HABITACION y JRGY_DETALLE_PAGO_HABITACION; proc gestor JRGY_PRO_PAGO_HABITACION calcula total por estadía y marca habitación OCUPADA.
 - Ventas de productos: JRGY_VENTA + JRGY_DETALLE_VENTA (stock/trigger) y tabla JRGY_PAGO_VENTA con modo de pago; proc JRGY_PRO_REGISTRAR_VENTA genera cabecera/detalle y movimientos de stock.
 - Catálogo de medios de pago: JRGY_CAT_MODO_PAGO (EFECTIVO/TARJETA/TRANSFERENCIA).
 - Faltantes: no hay tabla de comprobante/factura ni numeración, no se vincula pago a un folio, reservas almacenan totales pero sin flag de facturado, backend/frontend aún no exponen flujos de cobro.
+
+Referencias de precios en otros módulos (leer how_to_*.txt)
+- Habitaciones: PRECIO_BASE en how_to_rooms; reservas guardan TOTAL_HABITACION/TOTAL_SERVICIOS y se usan para facturar.
+- Servicios: P_PRECIO en how_to_services; se reflejan en TOTAL_SERVICIOS de la reserva y pueden aparecer como líneas del comprobante.
+- Productos: PRECIO_PRODUCTO y opcional PRECIO_EXTRA en relación servicio-producto (how_to_productos); ventas usan PRECIO_PRODUCTO del detalle de venta.
+- Compras/proveedores: PRECIO_COMPRA y VALOR_TOTAL en how_to_distribuidores; sirven para egresos y valoración de stock (no se facturan a cliente, pero afectan balance).
+- Departamentos/empleados: presupuestos/sueldos (how_to_departamentos_admin y how_to_empleados_only_admin) no generan facturación a cliente pero son costos a considerar en reportes financieros.
 
 Modelo propuesto (comprobante + líneas + relación con pagos)
 - Cabecera JRGY_COMPROBANTE (COD_COMPROBANTE PK, TIPO_DOC CHAR(1) BOLETA/FACTURA/RECIBO, ORIGEN_TIPO VARCHAR2(20) {RESERVA,VENTA,MANUAL}, ORIGEN_ID NUMBER, CLIENTE_RUT, CLIENTE_NOMBRE, EMAIL, DIRECCION, SUBTOTAL, IMPUESTO, TOTAL, COD_MODO_PAGO, ESTADO {EMITIDO,ANULADO,BORRADOR}, FECHA_EMISION, METADATA_JSON CLOB para folio externo/URL PDF).
@@ -28,6 +36,18 @@ Procedimientos sugeridos (prefijo JRGY_PRO_BILLING_)
 - JRGY_PRO_BILLING_LISTAR(p_desde, p_hasta, p_estado, p_tipo_doc, p_origen, p_busqueda, cur OUT) -> filtro por fecha emisión y por RUT/nombre/email.
 - JRGY_PRO_BILLING_GET(p_id, cur OUT) -> devuelve cabecera + líneas + pagos asociados.
 - JRGY_PRO_BILLING_ANULAR(p_id, p_motivo, p_user_id) -> marca ESTADO=ANULADO, guarda motivo en METADATA_JSON; no borra pagos pero los desacopla del balance si la política lo exige.
+
+Estadísticos / dashboards de facturación
+- Métricas base: total EMITIDO y COBRADO por rango de fechas, por TIPO_DOC, por MODO_PAGO, y por ORIGEN (RESERVA vs VENTA); conteo y monto ANULADO.
+- Métricas operativas: comprobantes pendientes de pago (TOTAL - sum(pagos) > 0), tickets sin folio, pagos parciales.
+- Procedimientos sugeridos:
+  * JRGY_PRO_BILLING_STATS_RESUMEN(p_desde, p_hasta, cur OUT): devuelve emitido/cobrado/pendiente/anulado por rango.
+  * JRGY_PRO_BILLING_STATS_BREAKDOWN(p_desde, p_hasta, p_group VARCHAR2, cur OUT): agrupa por p_group in ('TIPO_DOC','MODO_PAGO','ORIGEN','ESTADO').
+  * JRGY_PRO_BILLING_TOP_ITEMS(p_desde, p_hasta, p_origen, cur OUT): top servicios/productos facturados (usa ORIGEN_ITEM_TIPO/ID de COMPROBANTE_DET).
+  * JRGY_PRO_BILLING_TOP_ROOMS(p_desde, p_hasta, cur OUT): camas/habitaciones más facturadas/reservadas, con noches y monto total.
+  * JRGY_PRO_BILLING_TOP_SERVICIOS(p_desde, p_hasta, cur OUT): servicios más solicitados en reservas (conteo y monto).
+  * JRGY_PRO_BILLING_TOP_PRODUCTOS(p_desde, p_hasta, cur OUT): productos más vendidos en comprobantes de venta.
+- Estos procs alimentan dashboards admin y se combinan con how_to_balance para evitar doble conteo: decidir si los estadísticos muestran devengado (emitido) o cobrado (pagos).
 
 Reglas de cálculo
 - IVA/imp impuestos parametrizables (ej. 19% en Chile); subtotal = total / (1+iva). Guardar tanto SUBTOTAL como IMPUESTO y TOTAL en cabecera para reportes rápidos.

@@ -45,7 +45,7 @@ Roles y comportamiento esperado
 - USER: no accede a CRUD; solo verá productos incluidos en su servicio/reserva (si se implementa la visualización).
 
 Experiencia cliente
-- No se muestra el catálogo completo de productos; el cliente ve solo el resultado del servicio que contrata. Si se listan items, se presentan como “incluye bata y toalla”, sin exponer stock ni precios internos.
+- No se muestra el catálogo completo de productos; el cliente solo ve paquetes armados por empleados/admin (cada paquete es un servicio con productos asociados). Si se listan items, se presentan como “incluye bata y toalla”, sin exponer stock ni precios internos.
 - Los productos entregados a una reserva pueden aparecer como “consumibles usados” en el detalle de la reserva, pero nunca como un CRUD.
 
 Experiencia empleado

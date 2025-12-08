@@ -182,7 +182,8 @@ router.post(
   '/services',
   asyncHandler(async (req, res) => {
     const token = extractToken(req);
-    await withConnection((conn) => requireUserFromToken(conn, token, true));
+    const user = await withConnection((conn) => requireUserFromToken(conn, token, false));
+    if (!hasRole(user, ['ADMIN', 'EMPLOYEE'])) throw new AppError('No autorizado', 403);
 
     const data = req.body || {};
     const nombre = (data.nombre || '').trim();
@@ -247,7 +248,8 @@ router.put(
   '/services/:id',
   asyncHandler(async (req, res) => {
     const token = extractToken(req);
-    await withConnection((conn) => requireUserFromToken(conn, token, true));
+    const user = await withConnection((conn) => requireUserFromToken(conn, token, false));
+    if (!hasRole(user, ['ADMIN', 'EMPLOYEE'])) throw new AppError('No autorizado', 403);
 
     const id = Number(req.params.id);
     if (!id) throw new AppError('ID inválido', 400);
@@ -304,7 +306,8 @@ router.patch(
   '/services/:id/status',
   asyncHandler(async (req, res) => {
     const token = extractToken(req);
-    await withConnection((conn) => requireUserFromToken(conn, token, true));
+    const user = await withConnection((conn) => requireUserFromToken(conn, token, false));
+    if (!hasRole(user, ['ADMIN', 'EMPLOYEE'])) throw new AppError('No autorizado', 403);
 
     const id = Number(req.params.id);
     const estado = String(req.body?.estado || '').toLowerCase();
@@ -332,7 +335,8 @@ router.delete(
   '/services/:id',
   asyncHandler(async (req, res) => {
     const token = extractToken(req);
-    await withConnection((conn) => requireUserFromToken(conn, token, true));
+    const user = await withConnection((conn) => requireUserFromToken(conn, token, false));
+    if (!hasRole(user, ['ADMIN', 'EMPLOYEE'])) throw new AppError('No autorizado', 403);
 
     const id = Number(req.params.id);
     if (!id) throw new AppError('ID inválido', 400);

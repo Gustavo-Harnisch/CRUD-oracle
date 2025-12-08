@@ -23,6 +23,7 @@ const NAV_VARIANTS = {
     { to: "/employee/clients", label: "Check-in y clientes" },
     { to: "/employee/rooms", label: "Habitaciones (ops)" },
     { to: "/employee/services", label: "Servicios" },
+    { to: "/employee/packages", label: "Paquetes" },
     { to: "/employee/requests", label: "Peticiones de huéspedes" },
     { to: "/employee/department", label: "Mi departamento" },
     { to: "/admin/distributors", label: "Proveedores" }
@@ -33,7 +34,6 @@ const NAV_VARIANTS = {
     { to: "/admin/inventory", label: "Inventario" },
     { to: "/admin/rooms", label: "Habitaciones" },
     { to: "/admin/services", label: "Servicios" },
-    { to: "/admin/packages", label: "Paquetes" },
     { to: "/admin/users", label: "Usuarios" },
     { to: "/admin/employees", label: "Empleados" },
     { to: "/admin/departments", label: "Departamentos" },
@@ -41,6 +41,11 @@ const NAV_VARIANTS = {
     { to: "/admin/reports", label: "Reportes" },
     // Auditoría/logs y solicitudes quedan fuera del menú hasta tener funcionalidad real.
   ],
+};
+
+const parseNavTarget = (to) => {
+  const parsed = new URL(to, "http://dummy");
+  return { path: parsed.pathname, hash: parsed.hash };
 };
 
 const resolveNavVariant = (roles = [], isAuthenticated) => {
@@ -59,6 +64,29 @@ const resolveHomePath = (roles = [], isAuthenticated) => {
   return "/";
 };
 
+const findActivePath = (items, pathname, hash) => {
+  let bestPath = null;
+  let bestLength = -1;
+
+  items.forEach(({ to, end }) => {
+    const { path, hash: targetHash } = parseNavTarget(to);
+    if (targetHash && targetHash !== hash) return;
+
+    const matches = end
+      ? pathname === path
+      : pathname === path || pathname.startsWith(`${path}/`);
+
+    if (!matches) return;
+
+    if (path.length > bestLength) {
+      bestPath = path;
+      bestLength = path.length;
+    }
+  });
+
+  return bestPath;
+};
+
 const Navbar = () => {
   const { isAuthenticated, user, logout } = useAuth();
   const navigate = useNavigate();
@@ -68,23 +96,6 @@ const Navbar = () => {
     logout();
     navigate("/", { replace: true });
   };
-
-  const isItemActive = (to, end = false) => {
-    const parsed = new URL(to, "http://dummy");
-    const targetPath = parsed.pathname;
-    const targetHash = parsed.hash;
-
-    if (end) {
-      if (location.pathname !== targetPath) return false;
-      return targetHash ? location.hash === targetHash : true;
-    }
-
-    if (!location.pathname.startsWith(targetPath)) return false;
-    return targetHash ? location.hash === targetHash : true;
-  };
-
-  const linkClass = (to, end) =>
-    `nav-link${isItemActive(to, end) ? " active fw-semibold" : ""}`;
 
   const roles = Array.isArray(user?.roles)
     ? user.roles.map((r) => String(r).toUpperCase())
@@ -96,6 +107,10 @@ const Navbar = () => {
   const homePath = resolveHomePath(roles, isAuthenticated);
   const primaryItems = navItems.slice(0, 4);
   const extraItems = navItems.slice(4);
+  const activePath = findActivePath(navItems, location.pathname, location.hash);
+
+  const isItemActive = (to) => parseNavTarget(to).path === activePath;
+  const linkClass = (to) => `nav-link${isItemActive(to) ? " active fw-semibold" : ""}`;
 
   return (
     <nav className="navbar navbar-expand-md navbar-light bg-white shadow-sm fixed-top">
@@ -120,7 +135,7 @@ const Navbar = () => {
           <ul className="navbar-nav ms-auto align-items-md-center gap-md-3">
             {primaryItems.map(({ to, label, end }) => (
               <li className="nav-item" key={to}>
-                <NavLink to={to} end={end} className={() => linkClass(to, end)}>
+                <NavLink to={to} end={end} className={() => linkClass(to)}>
                   {label}
                 </NavLink>
               </li>
@@ -144,7 +159,7 @@ const Navbar = () => {
                         to={to}
                         end={end}
                         className={() =>
-                          `dropdown-item${isItemActive(to, end) ? " active fw-semibold" : ""}`
+                          `dropdown-item${isItemActive(to) ? " active fw-semibold" : ""}`
                         }
                       >
                         {label}
