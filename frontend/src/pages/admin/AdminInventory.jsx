@@ -5,6 +5,7 @@ import {
   updateProduct,
   deleteProduct,
 } from "../../services/productService";
+import { fetchServiceCategories } from "../../services/serviceService";
 import { useAuth } from "../../context/AuthContext";
 import { PAGE_STATUS, getStatusClasses } from "../../utils/pageStatus";
 
@@ -33,25 +34,49 @@ const AdminInventory = () => {
   });
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
+  const [categories, setCategories] = useState([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
+  const [categoriesError, setCategoriesError] = useState("");
+  const deriveCategories = (list = []) => {
+    const seen = new Set();
+    return list
+      .map((p) => String(p.tipo || "").trim().toUpperCase())
+      .filter((name) => {
+        if (!name || seen.has(name)) return false;
+        seen.add(name);
+        return true;
+      });
+  };
   const typeOptions = useMemo(() => {
     const seen = new Set();
     const list = [];
-    products.forEach((p) => {
-      const name = (p.tipo || "").trim();
+    const pushName = (raw) => {
+      const name = (raw || "").trim();
       if (name && !seen.has(name)) {
         seen.add(name);
         list.push(name);
       }
-    });
-    [form.tipo, filters.tipo].forEach((name) => {
-      const n = (name || "").trim();
-      if (n && !seen.has(n)) {
-        seen.add(n);
-        list.push(n);
-      }
-    });
+    };
+    (Array.isArray(categories) ? categories : []).forEach(pushName);
+    deriveCategories(products).forEach(pushName);
+    [form.tipo, filters.tipo].forEach(pushName);
     return list;
-  }, [products, form.tipo, filters.tipo]);
+  }, [categories, products, form.tipo, filters.tipo]);
+
+  const loadCategories = async (productsData = products) => {
+    setCategoriesError("");
+    setCategoriesLoading(true);
+    try {
+      const data = await fetchServiceCategories();
+      setCategories(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error(err);
+      setCategories(deriveCategories(productsData));
+      setCategoriesError("No se pudieron cargar las categorías; usando valores existentes.");
+    } finally {
+      setCategoriesLoading(false);
+    }
+  };
 
   const load = async () => {
     setLoading(true);
@@ -59,8 +84,10 @@ const AdminInventory = () => {
     try {
       const data = await listProducts();
       setProducts(data);
+      await loadCategories(data);
     } catch (err) {
       setError("No se pudo cargar el inventario.");
+      await loadCategories(products);
     } finally {
       setLoading(false);
     }
@@ -90,7 +117,7 @@ const AdminInventory = () => {
     setEditingId(prod.id);
     setForm({
       nombre: prod.nombre,
-      tipo: prod.tipo,
+      tipo: (prod.tipo || "").toUpperCase(),
       precio: prod.precio,
       stock: prod.stock,
       umbral: prod.umbralAlerta ?? "",
@@ -103,13 +130,34 @@ const AdminInventory = () => {
     setForm(emptyForm);
   };
 
+  const handleAddCategory = () => {
+    const name = window.prompt("Nombre de la categoría (se guarda en MAYÚSCULAS):");
+    if (name === null) return;
+    const normalized = (name || "").trim().toUpperCase();
+    if (!normalized) return;
+    setCategories((prev) => {
+      const next = Array.isArray(prev) ? [...prev] : [];
+      if (!next.includes(normalized)) next.push(normalized);
+      return next;
+    });
+    setForm((p) => ({ ...p, tipo: normalized }));
+  };
+
+  const handleCategoryChange = (value) => {
+    if (value === "__add__") {
+      handleAddCategory();
+      return;
+    }
+    setForm((p) => ({ ...p, tipo: value }));
+  };
+
   const handleSubmit = async () => {
     setSaving(true);
     setError("");
     try {
       const payload = {
         nombre: form.nombre,
-        tipo: form.tipo,
+        tipo: (form.tipo || "").trim().toUpperCase(),
         precio: Number(form.precio),
         cantidad: Number(form.cantidad || 0),
         stock: Number(form.stock),
@@ -178,23 +226,57 @@ const AdminInventory = () => {
                     onChange={(e) => setForm((p) => ({ ...p, nombre: e.target.value }))}
                   />
                 </div>
-                <div className="col-md-6">
+                <div className="col-12">
                   <label className="form-label">Categoría</label>
-                  <select
-                    className="form-select"
-                    value={form.tipo}
-                    onChange={(e) => setForm((p) => ({ ...p, tipo: e.target.value }))}
-                  >
-                    <option value="">Selecciona</option>
-                    {typeOptions.map((t) => (
-                      <option key={t} value={t}>
-                        {t}
-                      </option>
-                    ))}
-                    {form.tipo && !typeOptions.includes(form.tipo) && (
-                      <option value={form.tipo}>{form.tipo}</option>
+                  <div className="d-flex gap-2 flex-wrap align-items-center">
+                    <select
+                      className="form-select flex-grow-1"
+                      style={{ minWidth: "220px" }}
+                      value={form.tipo}
+                      onChange={(e) => handleCategoryChange(e.target.value)}
+                      disabled={categoriesLoading}
+                    >
+                      <option value="">{categoriesLoading ? "Cargando..." : "Selecciona"}</option>
+                      {typeOptions.map((t) => (
+                        <option key={t} value={t}>
+                          {t}
+                        </option>
+                      ))}
+                      {form.tipo && !typeOptions.includes(form.tipo) && (
+                        <option value={form.tipo}>{form.tipo}</option>
+                      )}
+                      <option value="__add__">+ Agregar categoría...</option>
+                    </select>
+                    <button
+                      type="button"
+                      className="btn btn-outline-secondary flex-shrink-0"
+                      style={{ minWidth: "130px" }}
+                      onClick={handleAddCategory}
+                      disabled={categoriesLoading}
+                    >
+                      Agregar
+                    </button>
+                  </div>
+                  <div className="d-flex flex-wrap justify-content-between align-items-center mt-1">
+                    <div className="form-text mb-0">
+                      {categoriesLoading && <span className="text-muted">Cargando categorías...</span>}
+                      {categoriesError && <span className="text-danger">{categoriesError}</span>}
+                      {!categoriesLoading && !categoriesError && (
+                        <span className="text-muted">
+                          Usa la lista o agrega una nueva categoría (se guarda en MAYÚSCULAS).
+                        </span>
+                      )}
+                    </div>
+                    {!categoriesLoading && (
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-link p-0 ms-auto"
+                        onClick={() => loadCategories(products)}
+                      >
+                        Recargar
+                      </button>
                     )}
-                  </select>
+                  </div>
                 </div>
                 <div className="col-md-6">
                   <label className="form-label">Precio</label>
@@ -291,8 +373,9 @@ const AdminInventory = () => {
                     className="form-select"
                     value={filters.tipo}
                     onChange={(e) => setFilters((p) => ({ ...p, tipo: e.target.value }))}
+                    disabled={categoriesLoading && typeOptions.length === 0}
                   >
-                    <option value="">Todas</option>
+                    <option value="">{categoriesLoading ? "Cargando..." : "Todas"}</option>
                     {typeOptions.map((t) => (
                       <option key={`f-${t}`} value={t}>
                         {t}
@@ -402,12 +485,12 @@ const AdminInventory = () => {
                                   : "badge bg-secondary-subtle text-secondary border"
                               }
                             >
-                              {p.estado}
+                            {p.estado}
                             </span>
                           </td>
                           <td className="text-end py-3">
                             <div className="btn-group btn-group-sm">
-                              <button className="btn btn-outline-primary" type="button" onClick={() => handleEditMock(p)}>
+                              <button className="btn btn-outline-primary" type="button" onClick={() => handleEdit(p)}>
                                 Editar
                               </button>
                               <button className="btn btn-outline-danger" type="button" onClick={() => handleDelete(p.id)}>

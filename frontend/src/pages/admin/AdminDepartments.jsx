@@ -137,8 +137,7 @@ const AdminDepartments = () => {
     }
   };
 
-  const highlightMissing = (dep) =>
-    !dep.jefeEmpleadoId || dep.jefeEmpleadoId === null || dep.presupuesto === null || dep.presupuesto === undefined;
+  const highlightMissing = (dep) => !dep.jefeEmpleadoId || dep.jefeEmpleadoId === null;
 
   return (
     <div className="container-xxl py-4">
@@ -150,9 +149,7 @@ const AdminDepartments = () => {
             Datos conectados a la base. Admin puede crear, editar y eliminar.
           </p>
         </div>
-        <span className={`badge ${getStatusClasses(canManage ? PAGE_STATUS.OK : PAGE_STATUS.READONLY)}`}>
-          {canManage ? PAGE_STATUS.OK : PAGE_STATUS.READONLY}
-        </span>
+        <span className={`badge ${getStatusClasses(PAGE_STATUS.LIVE)}`}>{PAGE_STATUS.LIVE}</span>
       </div>
 
       {error && <div className="alert alert-danger">{error}</div>}

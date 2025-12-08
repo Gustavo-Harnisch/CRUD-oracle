@@ -83,8 +83,8 @@ const CustomerProfile = () => {
                   <p className="text-uppercase text-muted small mb-1">Datos de la cuenta</p>
                   <h2 className="h6 mb-0">Contacto y facturación</h2>
                 </div>
-                <span className={`badge ${getStatusClasses(PAGE_STATUS.EDITING)}`}>
-                  {PAGE_STATUS.EDITING}
+                <span className={`badge ${getStatusClasses(PAGE_STATUS.LIVE)}`}>
+                  {PAGE_STATUS.LIVE}
                 </span>
               </div>
 

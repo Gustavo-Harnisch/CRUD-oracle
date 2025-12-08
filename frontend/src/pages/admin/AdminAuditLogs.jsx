@@ -44,7 +44,7 @@ const AdminAuditLogs = () => {
         <div className="card-body">
           <div className="d-flex justify-content-between align-items-center mb-2">
             <h2 className="h6 mb-0">Últimos movimientos</h2>
-            <span className={`badge ${getStatusClasses(PAGE_STATUS.EDITING)}`}>{PAGE_STATUS.EDITING}</span>
+            <span className={`badge ${getStatusClasses(PAGE_STATUS.DEMO)}`}>{PAGE_STATUS.DEMO}</span>
           </div>
           <div className="table-responsive">
             <table className="table table-sm align-middle mb-0">

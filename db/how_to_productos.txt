@@ -44,6 +44,15 @@ Roles y comportamiento esperado
 - EMPLOYEE: solo consultar catálogo y stock; no modifica.
 - USER: no accede a CRUD; solo verá productos incluidos en su servicio/reserva (si se implementa la visualización).
 
+Experiencia cliente
+- No se muestra el catálogo completo de productos; el cliente ve solo el resultado del servicio que contrata. Si se listan items, se presentan como “incluye bata y toalla”, sin exponer stock ni precios internos.
+- Los productos entregados a una reserva pueden aparecer como “consumibles usados” en el detalle de la reserva, pero nunca como un CRUD.
+
+Experiencia empleado
+- Consulta el catálogo y stock para preparar servicios y responder tickets de clientes.
+- Ve alertas de stock bajo (STOCK <= UMBRAL_ALERTA) en el listado, pero no edita si no tiene rol ADMIN.
+- En el flujo de servicios, visualiza productos asociados (cantidad sugerida y sobreprecio si aplica) para saber qué preparar/entregar.
+
 Pasos recomendados para implementar
 1) Añadir columna UMBRAL_ALERTA a JRGY_PRODUCTO.
 2) Crear tabla JRGY_SERVICIO_PRODUCTO (PK compuesta, FKs a servicio y producto).

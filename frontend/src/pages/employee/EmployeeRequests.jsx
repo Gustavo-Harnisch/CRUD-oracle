@@ -5,14 +5,12 @@ import { PAGE_STATUS, getStatusClasses } from "../../utils/pageStatus";
 
 const statusVariant = (status = "") => {
   const normalized = status.toLowerCase();
-  if (normalized.includes("escala") || normalized.includes("vip"))
-    return "badge bg-danger-subtle text-danger border";
-  if (normalized.includes("progreso") || normalized.includes("ejec"))
-    return "badge bg-info-subtle text-info border";
+  if (normalized.includes("escala") || normalized.includes("vip")) return "badge bg-danger-subtle text-danger border";
+  if (normalized.includes("progreso") || normalized.includes("ejec")) return "badge bg-info-subtle text-info border";
+  if (normalized.includes("cola")) return "badge bg-warning-subtle text-warning border";
   if (normalized.includes("final") || normalized.includes("listo"))
     return "badge bg-success-subtle text-success border";
-  if (normalized.includes("pend"))
-    return "badge bg-warning-subtle text-warning border";
+  if (normalized.includes("pend")) return "badge bg-warning-subtle text-warning border";
   return "badge bg-light text-secondary border";
 };
 
@@ -21,6 +19,7 @@ const stageFromStatus = (status = "") => {
   if (normalized.includes("final") || normalized.includes("listo")) return "done";
   if (normalized.includes("escala") || normalized.includes("vip")) return "escalated";
   if (normalized.includes("ejec") || normalized.includes("progreso")) return "progress";
+  if (normalized.includes("cola")) return "pending";
   return "pending";
 };
 
@@ -73,6 +72,7 @@ const EmployeeRequests = () => {
               start: reservationMap.get(res.id)?.start || null,
               end: reservationMap.get(res.id)?.end || null,
               stage: stageFromStatus(it.estado || ""),
+              estadoCliente: it.estadoCliente || it.estado || "",
             }));
           } catch (err) {
             console.error("Error cargando servicios de reserva", res.id, err);
@@ -153,7 +153,7 @@ const EmployeeRequests = () => {
 
   const columns = useMemo(
     () => [
-      { id: "pending", title: "Pendientes / nuevos", tone: "warning", items: grouped.pending },
+      { id: "pending", title: "Pendientes / en cola", tone: "warning", items: grouped.pending },
       { id: "progress", title: "En ejecución", tone: "info", items: grouped.progress },
       { id: "escalated", title: "Escaladas / VIP", tone: "danger", items: grouped.escalated },
       { id: "done", title: "Finalizados", tone: "success", items: grouped.done },
@@ -234,15 +234,18 @@ const EmployeeRequests = () => {
                               </p>
                               <h3 className="h6 mb-0">{req.servicioNombre}</h3>
                             </div>
-                            <span className={statusVariant(req.estado)}>{req.estado || "Pendiente"}</span>
+                            <span className={statusVariant(req.estado || req.estadoCliente)}>
+                              {req.estado || req.estadoCliente || "Pendiente"}
+                            </span>
                           </div>
                           <div className="d-flex flex-wrap gap-2 align-items-center mb-2">
                             <span className="badge bg-light text-muted border">{req.tipo || "Sin tipo"}</span>
-                            {productos.length > 0 && (
-                              <span className="badge bg-secondary-subtle text-secondary border">
-                                {productos.length} prod.
-                              </span>
-                            )}
+                            {productos.length > 0 &&
+                              productos.map((p) => (
+                                <span key={p.productoId} className="badge bg-secondary-subtle text-secondary border">
+                                  {p.nombreProducto} ×{p.cantidadBase || 1}
+                                </span>
+                              ))}
                             {Number.isFinite(req.hora) && (
                               <span className="badge bg-light text-muted border">Hora: {formatHour(req.hora)}</span>
                             )}

@@ -23,18 +23,28 @@ function mapDepartment(row) {
 
 async function findEmpleadoId(conn, usuarioId) {
   if (!usuarioId) return null;
-  const res = await conn.execute(
-    `SELECT COD_EMPLEADO FROM JRGY_EMPLEADO WHERE COD_USUARIO = :uid`,
-    { uid: usuarioId }
-  );
-  return (res.rows || [])[0]?.COD_EMPLEADO || null;
+  const numericId = Number(usuarioId);
+  try {
+    const res = await conn.execute(
+      `SELECT COD_EMPLEADO FROM JRGY_EMPLEADO WHERE COD_USUARIO = :uid`,
+      { uid: numericId }
+    );
+    return (res.rows || [])[0]?.COD_EMPLEADO || null;
+  } catch (err) {
+    // Algunas instalaciones thin del driver fallan con ORA-01745; usamos SQL directo como respaldo.
+    const fallback = await conn.execute(
+      `SELECT COD_EMPLEADO FROM JRGY_EMPLEADO WHERE COD_USUARIO = ${numericId}`
+    );
+    return (fallback.rows || [])[0]?.COD_EMPLEADO || null;
+  }
 }
 
 async function attachSueldoTotals(conn, deps) {
   if (!Array.isArray(deps) || deps.length === 0) return [];
   const result = await conn.execute(
     `
-      SELECT COD_DEPARTAMENTO, NVL(SUM(SALARIO), 0) AS SUELDO_TOTAL
+      SELECT COD_DEPARTAMENTO,
+             NVL(SUM(NVL(SUELDO_BASE, SALARIO)), 0) AS SUELDO_TOTAL
       FROM JRGY_EMPLEADO
     GROUP BY COD_DEPARTAMENTO
     `

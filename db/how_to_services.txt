@@ -34,6 +34,18 @@ Frontend (Admin)
 Frontend (Employee)
 - Vista solo lectura `/employee/services`: lista servicios activos con filtros básicos (buscar, tipo, hora) y muestra horarios/flags destacados.
 
+Experiencia cliente (web pública y reservas)
+- Catálogo público muestra solo servicios con ESTADO=ACTIVO, ordenados por ORDEN y DESTACADO primero.
+- Filtros disponibles: búsqueda, categoría/tipo (misma lista que admin/inventario) y hora (si el servicio tiene horarios). Horarios vacíos = disponible siempre.
+- Al agregar a una reserva, el backend valida con los procs de reserva-servicio: fecha dentro de la reserva, servicio activo, hora dentro del rango. Si falla, se responde con mensaje de validación claro.
+- Estados visibles en tickets del cliente: Creado → En cola → En ejecución → Listo (sin exponer estados internos de empleados).
+- Nueva idea: el cliente no elige productos ni compone; selecciona un paquete armado (tratamos cada paquete como un “servicio” con sus productos asociados). Los empleados/admin arman el paquete usando `/services/:id/products`. En UI cliente solo se muestra nombre/descr./precio/horarios; en backend se mantiene la asociación servicio-producto para que el empleado sepa qué insumos requiere el paquete.
+
+Experiencia empleado (tablero y vista /employee/services)
+- Pueden consultar servicios activos (y opcionalmente inactivos si se habilita en backend) con filtros rápidos de nombre/tipo/hora.
+- En el tablero de peticiones, gestionan tickets de servicios de reserva con flujo Pendiente/Nuevo → En ejecución → Finalizado; el cambio de estado se refleja en la vista del cliente.
+- Pueden ver productos asociados al servicio para preparar insumos (ruta `/services/:id/products`), sin modificar el catálogo de servicios salvo rol ADMIN.
+
 Roles y permisos
 - ADMIN: CRUD completo, horarios, estado, eliminación (con restricciones de reservas).
 - EMPLOYEE: solo lectura si se expone; no modifica.

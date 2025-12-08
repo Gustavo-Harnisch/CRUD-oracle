@@ -55,7 +55,7 @@ const AdminServices = () => {
       }
     });
     return list;
-  }, [services, form.tipo, filters.tipo, categories]);
+  }, [categories, form.tipo, filters.tipo]);
 
   const load = async () => {
     setLoading(true);
@@ -90,7 +90,7 @@ const AdminServices = () => {
     } catch (err) {
       console.error(err);
       const derived = Array.isArray(servicesData)
-        ? Array.from(new Set(servicesData.map((s) => s.tipo || "")))
+        ? Array.from(new Set(servicesData.map((s) => (s.tipo || "").toUpperCase())))
         : [];
       setCategories(derived.filter((c) => (c || "").trim() !== ""));
       setCategoriesError("No se pudieron cargar las categorías; usando valores existentes.");
@@ -184,7 +184,7 @@ const AdminServices = () => {
     setForm({
       nombre: svc.nombre || "",
       descripcion: svc.descripcion || "",
-      tipo: svc.tipo || "",
+      tipo: (svc.tipo || "").toUpperCase(),
       precio: svc.precio || 0,
       estado: (svc.estado || "activo").toLowerCase(),
       destacado: Boolean(svc.destacado),
@@ -206,7 +206,7 @@ const AdminServices = () => {
       const payload = {
         nombre: form.nombre,
         descripcion: form.descripcion,
-        tipo: form.tipo,
+        tipo: (form.tipo || "").trim().toUpperCase(),
         precio: Number(form.precio || 0),
         estado: form.estado,
         destacado: form.destacado,

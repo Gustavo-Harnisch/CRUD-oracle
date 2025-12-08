@@ -4,9 +4,10 @@ import { useNavigate } from "react-router-dom";
 import FormField from "../components/FormField";
 import PasswordField from "../components/PasswordField";
 import { useAuth } from "../context/AuthContext";
+import "./LoginPage.css";
 
-const Card = ({ title, children, footer }) => (
-  <div className="card shadow-sm w-100" style={{ maxWidth: "460px" }}>
+const Card = ({ title, children, footer, className = "" }) => (
+  <div className={`card shadow-sm w-100 ${className}`} style={{ maxWidth: "460px" }}>
     <div className="card-body">
       <h1 className="h4 mb-3 text-center">{title}</h1>
       {children}
@@ -28,6 +29,12 @@ const initialFormState = {
 
 const phoneRegex = /^[0-9]{7,15}$/;
 const rutRegex = /^[0-9]{7,8}$/;
+
+const loginHighlights = [
+  "Soporte humano inmediato cuando lo necesites",
+  "Tus datos seguros y listos para reservar en segundos",
+  "Convertimos cada ingreso en una bienvenida personalizada",
+];
 
 const LoginPage = () => {
   const navigate = useNavigate();
@@ -118,27 +125,30 @@ const LoginPage = () => {
   };
 
   return (
-    <div className="container py-5 d-flex justify-content-center">
-      <Card
-        title={isRegisterMode ? "Crear cuenta" : "Iniciar sesión"}
-        footer={
-          <button
-            type="button"
-            className="btn btn-link p-0"
-            onClick={() => {
-              setIsRegisterMode((prev) => !prev);
-              setFormData((prev) => ({
-                ...initialFormState,
-                email: prev.email,
-              }));
-              setError(null);
-            }}
+    <div className="login-shell">
+      <div className="login-panel">
+        <div className="login-panel__form">
+          <Card
+            className="login-card"
+            title={isRegisterMode ? "Crear cuenta" : "Iniciar sesión"}
+            footer={
+              <button
+                type="button"
+                className="btn btn-link p-0"
+                onClick={() => {
+                  setIsRegisterMode((prev) => !prev);
+                  setFormData((prev) => ({
+                    ...initialFormState,
+                    email: prev.email,
+                  }));
+                  setError(null);
+                }}
+              >
+                {isRegisterMode ? "¿Ya tienes cuenta? Inicia sesión" : "¿Nuevo? Crea una cuenta"}
+              </button>
+            }
           >
-            {isRegisterMode ? "¿Ya tienes cuenta? Inicia sesión" : "¿Nuevo? Crea una cuenta"}
-          </button>
-        }
-      >
-        <form onSubmit={handleSubmit}>
+            <form onSubmit={handleSubmit}>
           {isRegisterMode && (
             <>
               <FormField
@@ -235,7 +245,23 @@ const LoginPage = () => {
         </form>
       </Card>
     </div>
-  );
+
+    <div className="login-panel__aside">
+      <div className="login-panel__badge">Residencial Maule</div>
+      <h2>Accede a tu experiencia</h2>
+      <p>
+        Inicia sesión para ver tus reservas, pedir servicios adicionales o contactar al equipo. Si aún no tienes cuenta,
+        crea una y mantenemos el contacto antes de tu llegada.
+      </p>
+      <ul className="login-highlight-list">
+        {loginHighlights.map((item) => (
+          <li key={item}>{item}</li>
+        ))}
+      </ul>
+    </div>
+  </div>
+</div>
+);
 };
 
 export default LoginPage;

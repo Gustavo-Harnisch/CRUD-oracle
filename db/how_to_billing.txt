@@ -1,0 +1,60 @@
+Guía rápida: Billing / Facturación y pagos
+==========================================
+Objetivo
+- Normalizar cómo se emiten comprobantes (boleta/factura/recibo) para reservas y ventas, registrando pagos y vínculos al origen solo mediante procedimientos PL/SQL.
+- Evitar doble conteo entre totales de reserva/venta y pagos (ver how_to_balance) y dejar trazabilidad de medio de pago y folio.
+
+Estado actual en BD
+- Pagos de habitación: tablas JRGY_PAGO_HABITACION y JRGY_DETALLE_PAGO_HABITACION; proc gestor JRGY_PRO_PAGO_HABITACION calcula total por estadía y marca habitación OCUPADA.
+- Ventas de productos: JRGY_VENTA + JRGY_DETALLE_VENTA (stock/trigger) y tabla JRGY_PAGO_VENTA con modo de pago; proc JRGY_PRO_REGISTRAR_VENTA genera cabecera/detalle y movimientos de stock.
+- Catálogo de medios de pago: JRGY_CAT_MODO_PAGO (EFECTIVO/TARJETA/TRANSFERENCIA).
+- Faltantes: no hay tabla de comprobante/factura ni numeración, no se vincula pago a un folio, reservas almacenan totales pero sin flag de facturado, backend/frontend aún no exponen flujos de cobro.
+
+Modelo propuesto (comprobante + líneas + relación con pagos)
+- Cabecera JRGY_COMPROBANTE (COD_COMPROBANTE PK, TIPO_DOC CHAR(1) BOLETA/FACTURA/RECIBO, ORIGEN_TIPO VARCHAR2(20) {RESERVA,VENTA,MANUAL}, ORIGEN_ID NUMBER, CLIENTE_RUT, CLIENTE_NOMBRE, EMAIL, DIRECCION, SUBTOTAL, IMPUESTO, TOTAL, COD_MODO_PAGO, ESTADO {EMITIDO,ANULADO,BORRADOR}, FECHA_EMISION, METADATA_JSON CLOB para folio externo/URL PDF).
+- Detalle JRGY_COMPROBANTE_DET (COD_COMPROBANTE, NRO_LINEA, DESCRIPCION, CANTIDAD, PRECIO_UNIT, IMPUESTO, TOTAL_LINEA, ORIGEN_ITEM_TIPO {HABITACION,SERVICIO,PRODUCTO}, ORIGEN_ITEM_ID).
+- Relación pagos JRGY_COMPROBANTE_PAGO (COD_COMPROBANTE, MODULO {HABITACION,VENTA}, PAGO_ID, MONTO_APLICADO, REF_EXTERNA) para enlazar con JRGY_PAGO_HABITACION o JRGY_PAGO_VENTA sin duplicar tablas.
+- Si se requiere folio secuencial, crear JRGY_SEQ_FOLIO_BOLETA / JRGY_SEQ_FOLIO_FACTURA o tabla de folios con rango y estado.
+
+Procedimientos sugeridos (prefijo JRGY_PRO_BILLING_)
+- JRGY_PRO_BILLING_FROM_RESERVA(p_reserva_id, p_tipo_doc, p_modo_pago, p_usuario_id, p_email, p_guardar_pago NUMBER, p_id OUT, p_total OUT)
+  * Usa TOTAL_HABITACION + TOTAL_SERVICIOS de JRGY_RESERVA; genera cabecera/detalle (una línea por noche y por servicio agregado o resumen) y, si p_guardar_pago=1, inserta en JRGY_PAGO_HABITACION + JRGY_COMPROBANTE_PAGO.
+  * Valida que la reserva exista, no esté ya facturada (flag o búsqueda de comprobante emitido para mismo ORIGEN_TIPO/ID) y que el modo de pago exista en catálogo.
+- JRGY_PRO_BILLING_FROM_VENTA(p_venta_id, p_tipo_doc, p_modo_pago, p_empleado_id, p_id OUT, p_total OUT)
+  * Lee JRGY_DETALLE_VENTA para construir líneas; calcula subtotal/imp y total; vincula pago opcional en JRGY_PAGO_VENTA y JRGY_COMPROBANTE_PAGO.
+  * Valida existencia de venta, stock ya descontado por proc de venta, y evita duplicar comprobante para misma venta.
+- JRGY_PRO_BILLING_REGISTRAR_PAGO(p_comprobante_id, p_modo_pago, p_monto, p_referencia, p_usuario_id, p_pago_id OUT)
+  * Inserta en COMPROBANTE_PAGO y en tabla de pago del módulo correspondiente si procede; actualiza ESTADO del comprobante a EMITIDO si estaba en borrador; controla que suma de pagos no supere TOTAL.
+- JRGY_PRO_BILLING_LISTAR(p_desde, p_hasta, p_estado, p_tipo_doc, p_origen, p_busqueda, cur OUT) -> filtro por fecha emisión y por RUT/nombre/email.
+- JRGY_PRO_BILLING_GET(p_id, cur OUT) -> devuelve cabecera + líneas + pagos asociados.
+- JRGY_PRO_BILLING_ANULAR(p_id, p_motivo, p_user_id) -> marca ESTADO=ANULADO, guarda motivo en METADATA_JSON; no borra pagos pero los desacopla del balance si la política lo exige.
+
+Reglas de cálculo
+- IVA/imp impuestos parametrizables (ej. 19% en Chile); subtotal = total / (1+iva). Guardar tanto SUBTOTAL como IMPUESTO y TOTAL en cabecera para reportes rápidos.
+- Líneas de reserva: describir rango de fechas y servicios; usar PRECIO_UNIT de la fecha de reserva para evitar cambios futuros.
+- Líneas de venta: CANTIDAD * PRECIO_PRODUCTO ya guardado en detalle de venta; no recalcular desde stock.
+- Para evitar doble conteo, decidir si el balance toma montos devengados (totales de reserva/venta) o cobrados (pagos/comprobantes); documentar la elección en how_to_balance y respetarla en endpoints.
+
+Backend (API sugerida)
+- Endpoints protegidos ADMIN; EMPLOYEE solo si rol incluye permiso de facturación. Cliente puede leer sus comprobantes.
+- POST /api/billing/reservations/:id -> llama JRGY_PRO_BILLING_FROM_RESERVA; GET /api/billing/reservations/:id -> obtiene comprobante asociado.
+- POST /api/billing/sales/:id -> JRGY_PRO_BILLING_FROM_VENTA.
+- POST /api/billing/:id/payments -> JRGY_PRO_BILLING_REGISTRAR_PAGO (para pagos parciales o agregar ref externa).
+- GET /api/billing -> listar con filtros; GET /api/billing/:id -> detalle cabecera+líneas+pagos.
+- Solo procedimientos, sin SQL ad-hoc; validar modo de pago, rol y propiedad (cliente solo sus comprobantes).
+
+Frontend (flujos)
+- Admin/empleado: pantalla de facturación con buscador de reservas/ventas, selector de tipo de documento, modo de pago, preview de líneas y total; opción de anular y de registrar pagos adicionales.
+- Cliente: sección “Mis comprobantes” en perfil con descarga (PDF/JSON) y estado de pago; sin opción de edición.
+- Reportes: exportar CSV y atajo a balance para cruzar EMITIDO vs COBRADO.
+
+Roles y permisos
+- ADMIN: puede emitir, anular, listar y exportar comprobantes; configurar folios y modos de pago.
+- EMPLOYEE (con flag de permiso): puede emitir/registrar pagos pero no anular ni configurar folios.
+- USER: solo consulta sus comprobantes emitidos.
+
+Notas y pendientes
+- Definir dónde se guarda flag de facturado (columna en reserva/venta o consulta a comprobantes) para evitar duplicados.
+- Si se integra con servicio externo (SII/API), almacenar folio/track-id en METADATA_JSON y manejar reintentos/estados asincrónicos.
+- Considerar pagos parciales y split de modos de pago; JRGY_COMPROBANTE_PAGO permite sumar montos parciales.
+- Alinear la política de devengado vs. cobrado con how_to_balance; decidir si EGRESOS/INGRESOS en reportes usan pagos o totales.

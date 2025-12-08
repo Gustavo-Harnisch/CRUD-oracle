@@ -79,7 +79,7 @@ function parseHorarios(horarios = []) {
 router.get(
   '/services/categories',
   asyncHandler(async (_req, res) => {
-    const categories = await withConnection(async (conn) => {
+    const loadFromProcedure = async (conn) => {
       const result = await conn.execute(
         `BEGIN JRGY_PRO_CAT_SERVPROD_LISTAR(:cur); END;`,
         { cur: { dir: oracledb.BIND_OUT, type: oracledb.CURSOR } }
@@ -88,6 +88,41 @@ router.get(
       const rows = (await cur.getRows()) || [];
       await cur.close();
       return (rows || []).map((r) => r.TIPO).filter(Boolean);
+    };
+
+    const loadFallback = async (conn) => {
+      const result = await conn.execute(
+        `
+          SELECT TIPO FROM (
+            SELECT DISTINCT NVL(TRIM(UPPER(TIPO)), 'SIN_TIPO') AS TIPO FROM JRGY_SERVICIO
+            UNION
+            SELECT DISTINCT NVL(TRIM(UPPER(TIPO_PRODUCTO)), 'SIN_TIPO') AS TIPO FROM JRGY_PRODUCTO
+          )
+          ORDER BY TIPO
+        `
+      );
+      const rows = result.rows || [];
+      // Depending on driver config rows can be arrays or objects
+      return rows.map((r) => r.TIPO ?? r[0]).filter(Boolean);
+    };
+
+    const categories = await withConnection(async (conn) => {
+      try {
+        return await loadFromProcedure(conn);
+      } catch (err) {
+        // Si el procedimiento no existe o falla, usamos el SQL directo como respaldo.
+        const code = err?.errorNum || err?.code;
+        const message = (err?.message || '').toUpperCase();
+        const missingProc =
+          code === 6550 ||
+          message.includes('PLS-00201') ||
+          message.includes('JRGY_PRO_CAT_SERVPROD_LISTAR') ||
+          message.includes('ORA-06550');
+        if (!missingProc) {
+          console.error('Fallo el proc de categorías, usando fallback SQL', err);
+        }
+        return await loadFallback(conn);
+      }
     });
 
     res.json(categories);

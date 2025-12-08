@@ -38,6 +38,7 @@ import EmployeeHome from "./pages/employee/EmployeeHome";
 import AdminHome from "./pages/admin/AdminHome";
 import AdminRooms from "./pages/admin/AdminRooms";
 import AdminServices from "./pages/admin/AdminServices";
+import AdminPackages from "./pages/admin/AdminPackages";
 import AdminDepartments from "./pages/admin/AdminDepartments";
 import AdminDistributors from "./pages/admin/AdminDistributors";
 import AdminReports from "./pages/admin/AdminReports";
@@ -126,6 +127,7 @@ function App() {
           <Route path="/admin/employees" element={<AdminEmployees />} />
           <Route path="/admin/rooms" element={<AdminRooms />} />
           <Route path="/admin/services" element={<AdminServices />} />
+          <Route path="/admin/packages" element={<AdminPackages />} />
           <Route path="/admin/departments" element={<AdminDepartments />} />
           <Route path="/admin/reports" element={<AdminReports />} />
         </Route>
