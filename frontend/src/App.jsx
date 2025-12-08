@@ -106,7 +106,6 @@ function App() {
           <Route path="/employee/clients" element={<EmployeeClients />} />
           <Route path="/employee/requests" element={<EmployeeRequests />} />
           <Route path="/employee/rooms" element={<EmployeeRooms />} />
-          <Route path="/employee/services" element={<EmployeeServices />} />
           <Route path="/employee/department" element={<EmployeeDepartment />} />
         </Route>
 

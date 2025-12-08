@@ -12,11 +12,12 @@ import {
   replaceServiceProducts,
 } from "../../services/productService";
 import { PAGE_STATUS, getStatusClasses } from "../../utils/pageStatus";
+import { useAuth } from "../../context/AuthContext";
 
 const emptyForm = {
   nombre: "",
   descripcion: "",
-  tipo: "PAQUETE",
+  tipo: "",
   precio: 0,
   estado: "activo",
   destacado: false,
@@ -36,7 +37,15 @@ const badgeEstado = (estado = "") => {
 };
 
 const AdminPackages = () => {
+  const { user } = useAuth();
+  const roles = useMemo(
+    () => (Array.isArray(user?.roles) ? user.roles.map((r) => String(r).toUpperCase()) : []),
+    [user],
+  );
+  const isAdmin = roles.includes("ADMIN");
+  const allowedTypes = isAdmin ? null : ["HOUSEKEEPING", "ROOM SERVICE", "MANTENCION", "SPA"];
   const [packages, setPackages] = useState([]);
+  const [allServices, setAllServices] = useState([]);
   const [products, setProducts] = useState([]);
   const [productMap, setProductMap] = useState(new Map());
   const [loading, setLoading] = useState(true);
@@ -66,11 +75,25 @@ const AdminPackages = () => {
         listServices({ includeInactive: 1 }),
         listProducts(),
       ]);
-      const map = new Map((prodData || []).map((p) => [p.id, p]));
-      setProducts(prodData || []);
+      const filteredProds =
+        allowedTypes === null
+          ? prodData || []
+          : (prodData || []).filter((p) => allowedTypes.includes((p.tipo || "").trim().toUpperCase()));
+      const map = new Map((filteredProds || []).map((p) => [p.id, p]));
+      setProducts(filteredProds || []);
       setProductMap(map);
 
-      const pkgServices = (svcData || []).filter(isPackage);
+      const filteredServices =
+        allowedTypes === null
+          ? svcData || []
+          : (svcData || []).filter((s) => allowedTypes.includes((s.tipo || "").trim().toUpperCase()));
+      setAllServices(filteredServices);
+
+      const pkgServices = (svcData || []).filter((s) => {
+        const type = (s.tipo || "").trim().toUpperCase();
+        const matchesAllowed = allowedTypes === null || allowedTypes.includes(type);
+        return matchesAllowed && (isPackage(s) || type.length > 0);
+      });
       const relations = await Promise.all(
         pkgServices.map((s) =>
           listServiceProducts(s.id).catch((err) => {
@@ -111,28 +134,30 @@ const AdminPackages = () => {
   }, [packages, filters]);
 
   const resetForm = () => {
-    setForm(emptyForm);
+    setForm({ ...emptyForm, tipo: allowedTypes?.[0] || "" });
     setEditingId(null);
   };
 
   const handleEdit = async (pkg) => {
     setEditingId(pkg.id);
-    setForm({
-      nombre: pkg.nombre || "",
-      descripcion: pkg.descripcion || "",
-      tipo: pkg.tipo || "PAQUETE",
-      precio: pkg.precio || 0,
-      estado: pkg.estado || "activo",
-      destacado: Boolean(pkg.destacado),
-      orden: pkg.orden || "",
-      productos: [],
-    });
+      setForm({
+        nombre: pkg.nombre || "",
+        descripcion: pkg.descripcion || "",
+        tipo: pkg.tipo || (allowedTypes?.[0] || "PAQUETE"),
+        precio: pkg.precio || 0,
+        estado: pkg.estado || "activo",
+        destacado: Boolean(pkg.destacado),
+        orden: pkg.orden || "",
+        productos: [],
+        serviciosIncluidos: [],
+      });
     try {
       const items = await listServiceProducts(pkg.id);
-      setForm((prev) => ({ ...prev, productos: items || [] }));
+      const svcIncl = await fetchPackageServices(pkg.id);
+      setForm((prev) => ({ ...prev, productos: items || [], serviciosIncluidos: svcIncl || [] }));
     } catch (err) {
       console.error("No se pudieron cargar productos del paquete", err);
-      setForm((prev) => ({ ...prev, productos: [] }));
+      setForm((prev) => ({ ...prev, productos: [], serviciosIncluidos: [] }));
     }
   };
 
@@ -176,7 +201,7 @@ const AdminPackages = () => {
         nombre: form.nombre.trim(),
         descripcion: form.descripcion.trim(),
         precio: Number(form.precio || 0),
-        tipo: form.tipo.trim() || "PAQUETE",
+        tipo: form.tipo.trim() || (allowedTypes?.[0] || "PAQUETE"),
         estado: (form.estado || "activo").toLowerCase(),
         destacado: Boolean(form.destacado),
         orden: form.orden === "" ? null : Number(form.orden),
@@ -184,6 +209,15 @@ const AdminPackages = () => {
       };
 
       if (!payload.nombre) throw new Error("Nombre requerido");
+      if (allowedTypes && !allowedTypes.includes(payload.tipo.toUpperCase())) {
+        throw new Error("Tipo fuera de las categorías permitidas para tu rol.");
+      }
+      if (!form.serviciosIncluidos || form.serviciosIncluidos.length === 0) {
+        throw new Error("Agrega al menos un servicio incluido al paquete.");
+      }
+      if (!form.productos || form.productos.length === 0) {
+        throw new Error("Agrega al menos un producto al paquete.");
+      }
       let serviceId = editingId;
       if (editingId) {
         await updateService(editingId, payload);
@@ -193,6 +227,10 @@ const AdminPackages = () => {
       }
 
       if (serviceId) {
+        await replacePackageServices(
+          serviceId,
+          (form.serviciosIncluidos || []).map((s) => ({ servicioId: s.servicioId || s })),
+        );
         const items = (form.productos || []).map((p) => ({
           productoId: Number(p.productoId),
           cantidadBase: Number(p.cantidadBase || p.cantidad || 1),
@@ -246,7 +284,7 @@ const AdminPackages = () => {
     <div className="container py-4">
       <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-3">
         <div>
-          <p className="text-uppercase text-muted mb-1 small">Admin</p>
+          <p className="text-uppercase text-muted mb-1 small">{isAdmin ? "Admin" : "Empleado"}</p>
           <h1 className="h4 mb-1">Paquetes de servicio + productos</h1>
           <p className="text-muted small mb-0">
             Arma combos con servicios y productos asociados; calcula el total sugerido automáticamente.
@@ -255,35 +293,156 @@ const AdminPackages = () => {
         <span className={`badge ${getStatusClasses(PAGE_STATUS.LIVE)}`}>{PAGE_STATUS.LIVE}</span>
       </div>
 
+      {allowedTypes && (
+        <div className="alert alert-info d-flex flex-column flex-md-row justify-content-between align-items-md-center">
+          <div>
+            <div className="fw-semibold mb-1">Tus tipos permitidos</div>
+            <div className="d-flex flex-wrap gap-2">
+              {allowedTypes.map((t) => (
+                <span key={t} className="badge bg-light text-primary border">
+                  {t}
+                </span>
+              ))}
+            </div>
+          </div>
+          <small className="text-muted">
+            Solo puedes crear/editar paquetes y elegir productos dentro de estos tipos.
+          </small>
+        </div>
+      )}
+
       {error && <div className="alert alert-danger mb-3">{error}</div>}
 
       <div className="card shadow-sm mb-4">
         <div className="card-body">
-          <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-3 gap-2">
-            <h2 className="h6 mb-0">{editingId ? "Editar paquete" : "Crear paquete"}</h2>
-            <button type="button" className="btn btn-outline-secondary btn-sm" onClick={resetForm} disabled={saving}>
-              Limpiar
-            </button>
-          </div>
-          <form className="row g-3" onSubmit={handleSubmit}>
-            <div className="col-md-6">
-              <label className="form-label">Nombre</label>
-              <input
-                type="text"
-                className="form-control"
-                value={form.nombre}
-                onChange={(e) => setForm((p) => ({ ...p, nombre: e.target.value }))}
-                required
-              />
+            <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-3 gap-2">
+              <h2 className="h6 mb-0">{editingId ? "Editar paquete" : "Crear paquete"}</h2>
+              <button type="button" className="btn btn-outline-secondary btn-sm" onClick={resetForm} disabled={saving}>
+                Limpiar
+              </button>
             </div>
+            <form className="row g-3" onSubmit={handleSubmit}>
+              <div className="col-md-6">
+                <label className="form-label">Nombre</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  value={form.nombre}
+                  onChange={(e) => setForm((p) => ({ ...p, nombre: e.target.value }))}
+                  required
+                />
+              </div>
+              <div className="col-12">
+                <div className="d-flex justify-content-between align-items-center mb-2">
+                  <h3 className="h6 mb-0">Servicios incluidos</h3>
+                  <div className="d-flex gap-2">
+                    <select
+                      className="form-select form-select-sm"
+                      value={form.servicioSeleccion || ""}
+                      onChange={(e) => setForm((p) => ({ ...p, servicioSeleccion: e.target.value }))}
+                    >
+                      <option value="">Selecciona servicio</option>
+                      {allServices
+                        .filter((s) => !isPackage(s))
+                        .map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.nombre} (${Number(s.precio || 0).toLocaleString()})
+                          </option>
+                        ))}
+                    </select>
+                    <button
+                      type="button"
+                      className="btn btn-outline-primary btn-sm"
+                      onClick={() => {
+                        if (!form.servicioSeleccion) return;
+                        const sid = Number(form.servicioSeleccion);
+                        if (form.serviciosIncluidos?.some((s) => Number(s.servicioId || s) === sid)) return;
+                        setForm((prev) => ({
+                          ...prev,
+                          serviciosIncluidos: [
+                            ...(prev.serviciosIncluidos || []),
+                            {
+                              servicioId: sid,
+                              nombre:
+                                allServices.find((s) => Number(s.id) === sid)?.nombre || `Servicio ${sid}`,
+                              precio: allServices.find((s) => Number(s.id) === sid)?.precio || 0,
+                            },
+                          ],
+                          servicioSeleccion: "",
+                        }));
+                      }}
+                    >
+                      Añadir
+                    </button>
+                  </div>
+                </div>
+                {form.serviciosIncluidos && form.serviciosIncluidos.length > 0 ? (
+                  <div className="table-responsive">
+                    <table className="table table-sm align-middle">
+                      <thead>
+                        <tr>
+                          <th>Servicio</th>
+                          <th>Tipo</th>
+                          <th>Precio</th>
+                          <th />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {form.serviciosIncluidos.map((s) => {
+                          const svc = allServices.find((it) => Number(it.id) === Number(s.servicioId || s));
+                          return (
+                            <tr key={s.servicioId || s}>
+                              <td>{svc?.nombre || s.nombre || s.servicioId}</td>
+                              <td>{svc?.tipo || "—"}</td>
+                              <td>$ {Number(svc?.precio || s.precio || 0).toLocaleString()}</td>
+                              <td className="text-end">
+                                <button
+                                  type="button"
+                                  className="btn btn-outline-danger btn-sm"
+                                  onClick={() =>
+                                    setForm((prev) => ({
+                                      ...prev,
+                                      serviciosIncluidos: (prev.serviciosIncluidos || []).filter(
+                                        (x) => Number(x.servicioId || x) !== Number(s.servicioId || s),
+                                      ),
+                                    }))
+                                  }
+                                >
+                                  Quitar
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="text-muted small mb-0">Sin servicios incluidos.</p>
+                )}
+              </div>
             <div className="col-md-3">
               <label className="form-label">Tipo / categoría</label>
-              <input
-                type="text"
-                className="form-control"
-                value={form.tipo}
-                onChange={(e) => setForm((p) => ({ ...p, tipo: e.target.value }))}
-              />
+              {allowedTypes ? (
+                <select
+                  className="form-select"
+                  value={form.tipo || allowedTypes[0]}
+                  onChange={(e) => setForm((p) => ({ ...p, tipo: e.target.value }))}
+                >
+                  {allowedTypes.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  className="form-control"
+                  value={form.tipo || "PAQUETE"}
+                  onChange={(e) => setForm((p) => ({ ...p, tipo: e.target.value }))}
+                />
+              )}
             </div>
             <div className="col-md-3">
               <label className="form-label">Precio base servicio</label>
@@ -339,92 +498,92 @@ const AdminPackages = () => {
               </div>
             </div>
 
-            <div className="col-12">
-              <div className="d-flex justify-content-between align-items-center mb-2">
-                <h3 className="h6 mb-0">Productos incluidos</h3>
-                <div className="d-flex gap-2">
-                  <select
-                    className="form-select form-select-sm"
-                    value={form.productoSeleccion || ""}
-                    onChange={(e) => setForm((p) => ({ ...p, productoSeleccion: e.target.value }))}
-                  >
-                    <option value="">Selecciona producto</option>
-                    {products.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.nombre} (${Number(p.precio || 0).toLocaleString()})
-                      </option>
-                    ))}
-                  </select>
-                  <button type="button" className="btn btn-outline-primary btn-sm" onClick={addProductToForm}>
-                    Añadir
-                  </button>
+              <div className="col-12">
+                <div className="d-flex justify-content-between align-items-center mb-2">
+                  <h3 className="h6 mb-0">Productos incluidos</h3>
+                  <div className="d-flex gap-2">
+                    <select
+                      className="form-select form-select-sm"
+                      value={form.productoSeleccion || ""}
+                      onChange={(e) => setForm((p) => ({ ...p, productoSeleccion: e.target.value }))}
+                    >
+                      <option value="">Selecciona producto</option>
+                      {products.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.nombre} (${Number(p.precio || 0).toLocaleString()})
+                        </option>
+                      ))}
+                    </select>
+                    <button type="button" className="btn btn-outline-primary btn-sm" onClick={addProductToForm}>
+                      Añadir
+                    </button>
+                  </div>
                 </div>
+                {form.productos.length === 0 ? (
+                  <p className="text-muted small mb-0">Sin productos añadidos.</p>
+                ) : (
+                  <div className="table-responsive">
+                    <table className="table table-sm align-middle">
+                      <thead>
+                        <tr>
+                          <th>Producto</th>
+                          <th>Cantidad</th>
+                          <th>Precio extra</th>
+                          <th>Subtotal</th>
+                          <th />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {form.productos.map((p) => {
+                          const prod = productMap.get(p.productoId);
+                          const qty = Number(p.cantidadBase || p.cantidad || 1);
+                          const precioProd = Number(prod?.precio || 0);
+                          const extra =
+                            p.precioExtra === null || p.precioExtra === "" || p.precioExtra === undefined
+                              ? 0
+                              : Number(p.precioExtra);
+                          const subtotal = qty * (precioProd + extra);
+                          return (
+                            <tr key={p.productoId}>
+                              <td>{prod?.nombre || p.nombreProducto || p.productoId}</td>
+                              <td style={{ maxWidth: "100px" }}>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  className="form-control form-control-sm"
+                                  value={qty}
+                                  onChange={(e) =>
+                                    updateProductRow(p.productoId, "cantidadBase", Number(e.target.value) || 1)
+                                  }
+                                />
+                              </td>
+                              <td style={{ maxWidth: "140px" }}>
+                                <input
+                                  type="number"
+                                  className="form-control form-control-sm"
+                                  value={p.precioExtra ?? ""}
+                                  onChange={(e) => updateProductRow(p.productoId, "precioExtra", e.target.value)}
+                                  placeholder="+$ extra opcional"
+                                />
+                              </td>
+                              <td>$ {subtotal.toLocaleString()}</td>
+                              <td className="text-end">
+                                <button
+                                  type="button"
+                                  className="btn btn-outline-danger btn-sm"
+                                  onClick={() => removeProductRow(p.productoId)}
+                                >
+                                  Quitar
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
-              {form.productos.length === 0 ? (
-                <p className="text-muted small mb-0">Sin productos añadidos.</p>
-              ) : (
-                <div className="table-responsive">
-                  <table className="table table-sm align-middle">
-                    <thead>
-                      <tr>
-                        <th>Producto</th>
-                        <th>Cantidad</th>
-                        <th>Precio extra</th>
-                        <th>Subtotal</th>
-                        <th />
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {form.productos.map((p) => {
-                        const prod = productMap.get(p.productoId);
-                        const qty = Number(p.cantidadBase || p.cantidad || 1);
-                        const precioProd = Number(prod?.precio || 0);
-                        const extra =
-                          p.precioExtra === null || p.precioExtra === "" || p.precioExtra === undefined
-                            ? 0
-                            : Number(p.precioExtra);
-                        const subtotal = qty * (precioProd + extra);
-                        return (
-                          <tr key={p.productoId}>
-                            <td>{prod?.nombre || p.nombreProducto || p.productoId}</td>
-                            <td style={{ maxWidth: "100px" }}>
-                              <input
-                                type="number"
-                                min="1"
-                                className="form-control form-control-sm"
-                                value={qty}
-                                onChange={(e) =>
-                                  updateProductRow(p.productoId, "cantidadBase", Number(e.target.value) || 1)
-                                }
-                              />
-                            </td>
-                            <td style={{ maxWidth: "140px" }}>
-                              <input
-                                type="number"
-                                className="form-control form-control-sm"
-                                value={p.precioExtra ?? ""}
-                                onChange={(e) => updateProductRow(p.productoId, "precioExtra", e.target.value)}
-                                placeholder="+$ extra opcional"
-                              />
-                            </td>
-                            <td>$ {subtotal.toLocaleString()}</td>
-                            <td className="text-end">
-                              <button
-                                type="button"
-                                className="btn btn-outline-danger btn-sm"
-                                onClick={() => removeProductRow(p.productoId)}
-                              >
-                                Quitar
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
 
             <div className="col-12 d-flex justify-content-between align-items-center">
               <div className="text-muted small">

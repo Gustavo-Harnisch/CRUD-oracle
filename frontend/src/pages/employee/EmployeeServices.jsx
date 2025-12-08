@@ -19,6 +19,14 @@ const formatTime = (num) => {
 
 const EmployeeServices = () => {
   const { user } = useAuth();
+  const roles = useMemo(
+    () => (Array.isArray(user?.roles) ? user.roles.map((r) => String(r).toUpperCase()) : []),
+    [user],
+  );
+  const isAdmin = roles.includes("ADMIN");
+  const allowedTypes = isAdmin
+    ? null
+    : ["HOUSEKEEPING", "ROOM SERVICE", "MANTENCION", "SPA"]; // Tipos visibles para EMPLOYEE
   const [services, setServices] = useState([]);
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -42,7 +50,13 @@ const EmployeeServices = () => {
       setLoading(true);
       try {
         const data = await listServices();
-        setServices(data);
+        const filteredByRole =
+          allowedTypes === null
+            ? data
+            : (data || []).filter((svc) =>
+                allowedTypes.includes((svc.tipo || "").trim().toUpperCase()),
+              );
+        setServices(filteredByRole);
       } catch (err) {
         console.error(err);
         setError("No se pudieron cargar los servicios.");
@@ -55,7 +69,11 @@ const EmployeeServices = () => {
       setProductsLoading(true);
       try {
         const data = await listProducts();
-        setProducts(data);
+        const filteredByRole =
+          allowedTypes === null
+            ? data
+            : (data || []).filter((p) => allowedTypes.includes((p.tipo || "").trim().toUpperCase()));
+        setProducts(filteredByRole);
       } catch (err) {
         console.error(err);
         setProductError("No se pudieron cargar los productos.");
@@ -136,6 +154,9 @@ const EmployeeServices = () => {
         stock: Number(productForm.stock || 0),
       };
       if (!payload.nombre) throw new Error("Nombre requerido");
+      if (allowedTypes && !allowedTypes.includes(payload.tipo.toUpperCase())) {
+        throw new Error("No puedes crear/editar productos fuera de tus categorías permitidas.");
+      }
       if (editingProductId) {
         await updateProduct(editingProductId, payload);
       } else {
@@ -188,9 +209,9 @@ const EmployeeServices = () => {
         <div>
           <p className="text-uppercase text-muted small mb-1">Empleado</p>
           <h1 className="h4 mb-1">Servicios disponibles para huéspedes</h1>
-          <p className="text-muted small mb-0">
-            Consulta rápida de horarios y precios. CRUD habilitado solo para roles autorizados.
-          </p>
+              <p className="text-muted small mb-0">
+                Consulta rápida de horarios y precios. CRUD solo dentro de tus categorías permitidas.
+              </p>
         </div>
         <div className="d-flex gap-2">
           <button

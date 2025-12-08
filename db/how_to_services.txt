@@ -32,7 +32,8 @@ Frontend (Admin)
 - Solo ADMIN puede ejecutar acciones; EMPLOYEE/USER no acceden al CRUD admin.
 
 Frontend (Employee)
-- Vista solo lectura `/employee/services`: lista servicios activos con filtros básicos (buscar, tipo, hora) y muestra horarios/flags destacados.
+- Vista `/employee/services`: lista servicios activos con filtros básicos (buscar, tipo, hora) y muestra horarios/flags destacados.
+- Si el rol es EMPLOYEE se filtran servicios/productos a las categorías permitidas (ej. HOUSEKEEPING, ROOM SERVICE, MANTENCION, SPA) y solo puede CRUDear dentro de esas categorías.
 
 Experiencia cliente (web pública y reservas)
 - Catálogo público muestra solo servicios con ESTADO=ACTIVO, ordenados por ORDEN y DESTACADO primero.
@@ -48,7 +49,7 @@ Experiencia empleado (tablero y vista /employee/services)
 
 Roles y permisos
 - ADMIN: CRUD completo, horarios, estado, eliminación (con restricciones de reservas).
-- EMPLOYEE: solo lectura si se expone; no modifica.
+- EMPLOYEE: lectura y CRUD solo dentro de sus categorías asignadas; el resto no se muestra en la UI de empleado.
 - USER: ve servicios activos en la web pública y puede añadir a su reserva vía flujos de reserva (validado por procs de reserva-servicio).
 
 Servicios solicitados por clientes (tickets de reserva)

@@ -76,6 +76,36 @@ function parseHorarios(horarios = []) {
   return parsed;
 }
 
+async function fetchIncludedServices(conn, paqueteId) {
+  const result = await conn.execute(
+    `BEGIN JRGY_PRO_PAQ_SERV_LISTAR(:id, :cur); END;`,
+    { id: paqueteId, cur: { dir: oracledb.BIND_OUT, type: oracledb.CURSOR } }
+  );
+  const cur = result.outBinds.cur;
+  const rows = (await cur.getRows()) || [];
+  await cur.close();
+  return rows.map((r) => ({
+    paqueteId,
+    servicioId: r.COD_SERVICIO_INCL,
+    nombre: r.NOMBRE,
+    tipo: r.TIPO,
+    precio: r.PRECIO
+  }));
+}
+
+async function replaceIncludedServices(conn, paqueteId, items = []) {
+  const itemsJson = JSON.stringify(
+    (items || []).map((it) => ({
+      servicioId: Number(it.servicioId)
+    }))
+  );
+  await conn.execute(
+    `BEGIN JRGY_PRO_PAQ_SERV_REEMPLAZAR(:id, :itemsJson); END;`,
+    { id: paqueteId, itemsJson },
+    { autoCommit: true }
+  );
+}
+
 router.get(
   '/services/categories',
   asyncHandler(async (_req, res) => {
@@ -353,6 +383,41 @@ router.delete(
         if (err.errorNum === 20098) {
           throw new AppError('No se puede eliminar: servicio con reservas asociadas', 409);
         }
+        throw err;
+      }
+    });
+
+    res.json({ ok: true });
+  })
+);
+
+// Servicios incluidos en un paquete
+router.get(
+  '/services/:id/included-services',
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    if (!id) throw new AppError('ID inválido', 400);
+    const items = await withConnection((conn) => fetchIncludedServices(conn, id));
+    res.json(items);
+  })
+);
+
+router.put(
+  '/services/:id/included-services',
+  asyncHandler(async (req, res) => {
+    const token = extractToken(req);
+    const user = await withConnection((conn) => requireUserFromToken(conn, token, false));
+    if (!hasRole(user, ['ADMIN', 'EMPLOYEE'])) throw new AppError('No autorizado', 403);
+
+    const id = Number(req.params.id);
+    if (!id) throw new AppError('ID inválido', 400);
+    const items = Array.isArray(req.body) ? req.body : [];
+
+    await withConnection(async (conn) => {
+      try {
+        await replaceIncludedServices(conn, id, items);
+      } catch (err) {
+        if (err.errorNum === 20082) throw new AppError('Servicio no encontrado', 404);
         throw err;
       }
     });

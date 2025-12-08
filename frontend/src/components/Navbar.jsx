@@ -22,7 +22,6 @@ const NAV_VARIANTS = {
     { to: "/employee", label: "Dashboard" },
     { to: "/employee/clients", label: "Check-in y clientes" },
     { to: "/employee/rooms", label: "Habitaciones (ops)" },
-    { to: "/employee/services", label: "Servicios" },
     { to: "/employee/packages", label: "Paquetes" },
     { to: "/employee/requests", label: "Peticiones de huéspedes" },
     { to: "/employee/department", label: "Mi departamento" },

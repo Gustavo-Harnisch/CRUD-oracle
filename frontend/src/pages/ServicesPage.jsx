@@ -58,7 +58,7 @@ const ServicesPage = () => {
               <span className="services-pill text-uppercase">Servicios y experiencias</span>
               <h1 className="display-6 fw-bold text-white mb-3">Elige paquetes listos para tu estadía</h1>
               <p className="lead text-white-50 mb-4">
-                Paquetes armados por el staff: transporte, desayunos tempranos, guías locales y detalles premium. Nosotros coordinamos horarios e insumos.
+                Paquetes armados por el staff: combinamos servicios y productos (insumos) y coordinamos horarios por ti.
               </p>
               <div className="d-flex flex-wrap gap-2">
                 <a className="btn btn-light fw-semibold px-4" href="/rooms">

@@ -4,6 +4,7 @@ const { asyncHandler, AppError } = require('../utils/errors');
 const { withConnection } = require('../db');
 const { extractToken, requireUserFromToken } = require('../services/authService');
 const { hasRole } = require('../utils/authz');
+const { firstOutValue } = require('../utils/oracle');
 
 const router = express.Router();
 
@@ -121,8 +122,27 @@ function mapEmployee(row) {
     fechaContratacion: row.FECHA_CONTRATACION,
     estadoLaboralId: row.COD_ESTADO_LABORAL,
     estadoLaboral: row.ESTADO_LABORAL,
-    incompleto: row.INCOMPLETO === 1
+    incompleto: row.INCOMPLETO === 1,
+    habilidades: row.HABILIDADES || []
   };
+}
+
+async function fetchHabilidades(conn, ids = []) {
+  if (!Array.isArray(ids) || ids.length === 0) return new Map();
+  const placeholders = ids.map((_, i) => `:id${i}`).join(', ');
+  const binds = ids.reduce((acc, id, idx) => ({ ...acc, [`id${idx}`]: id }), {});
+  const res = await conn.execute(
+    `SELECT COD_EMPLEADO, CATEGORIA, TIPO FROM JRGY_EMPLEADO_HABILIDAD WHERE COD_EMPLEADO IN (${placeholders})`,
+    binds
+  );
+  const map = new Map();
+  (res.rows || []).forEach((r) => {
+    const empId = r.COD_EMPLEADO;
+    const list = map.get(empId) || [];
+    list.push({ categoria: r.CATEGORIA, tipo: r.TIPO });
+    map.set(empId, list);
+  });
+  return map;
 }
 
 router.get(
@@ -141,16 +161,22 @@ router.get(
         const cur = result.outBinds.cur;
         const rows = (await cur.getRows()) || [];
         await cur.close();
-        return rows.map(mapEmployee).filter(Boolean);
+        const list = rows.map(mapEmployee).filter(Boolean);
+        const habMap = await fetchHabilidades(conn, list.map((e) => e.id).filter(Boolean));
+        return list.map((e) => ({ ...e, habilidades: habMap.get(e.id) || [] }));
       } catch (err) {
         console.warn('Fallo JRGY_PRO_EMPLEADO_LISTAR, usando SELECT directo', err);
         try {
           const fallback = await conn.execute(SQL_EMPLOYEE_LIST);
-          return (fallback.rows || []).map(mapEmployee).filter(Boolean);
+          const list = (fallback.rows || []).map(mapEmployee).filter(Boolean);
+          const habMap = await fetchHabilidades(conn, list.map((e) => e.id).filter(Boolean));
+          return list.map((e) => ({ ...e, habilidades: habMap.get(e.id) || [] }));
         } catch (fallbackErr) {
           console.warn('Fallo SELECT con SUELDO_BASE, usando variante sin sueldo', fallbackErr);
           const fallback2 = await conn.execute(SQL_EMPLOYEE_LIST_NO_SALARY);
-          return (fallback2.rows || []).map(mapEmployee).filter(Boolean);
+          const list = (fallback2.rows || []).map(mapEmployee).filter(Boolean);
+          const habMap = await fetchHabilidades(conn, list.map((e) => e.id).filter(Boolean));
+          return list.map((e) => ({ ...e, habilidades: habMap.get(e.id) || [] }));
         }
       }
     });
@@ -178,8 +204,9 @@ router.post(
     if (!cargo) throw new AppError('Cargo requerido', 400);
 
     await withConnection(async (conn) => {
+      let newId = null;
       try {
-        await conn.execute(
+        const resCreate = await conn.execute(
           `BEGIN JRGY_PRO_EMPLEADO_CREAR(:uid, :cargo, :sueldo, :fecha, :depId, :estado, :id); END;`,
           {
             uid: usuarioId,
@@ -192,9 +219,16 @@ router.post(
           },
           { autoCommit: true }
         );
+        newId = firstOutValue(resCreate.outBinds.id) || null;
       } catch (err) {
         if (err.errorNum === 20052) throw new AppError('Estado laboral no encontrado', 422);
         throw err;
+      }
+
+      const habilidades = Array.isArray(data.habilidades) ? data.habilidades : [];
+      if (habilidades.length && newId) {
+        const json = JSON.stringify(habilidades);
+        await conn.execute(`BEGIN JRGY_PRO_EMP_HAB_REEMPLAZAR(:id, :json); END;`, { id: newId, json }, { autoCommit: true });
       }
     });
 
@@ -240,6 +274,10 @@ router.put(
         if (err.errorNum === 20052) throw new AppError('Estado laboral no encontrado', 422);
         throw err;
       }
+
+      const habilidades = Array.isArray(data.habilidades) ? data.habilidades : [];
+      const json = JSON.stringify(habilidades);
+      await conn.execute(`BEGIN JRGY_PRO_EMP_HAB_REEMPLAZAR(:id, :json); END;`, { id, json }, { autoCommit: true });
     });
 
     res.json({ ok: true });

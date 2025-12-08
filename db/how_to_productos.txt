@@ -37,11 +37,11 @@ Procedimientos para la relación con servicios
 Integración backend/front
 - Backend añadirá rutas /api/products y /api/services/:id/products que llamen solo a los procs anteriores.
 - Front admin: CRUD de productos + selector en servicios para asociar productos (multi-select con cantidades y sobreprecio).
-- Validar rol ADMIN en todas las operaciones de producto/relación.
+- Roles: ADMIN y EMPLOYEE pueden operar; EMPLOYEE debe limitarse a sus categorías permitidas (ej. housekeeping, room service, mantención, spa) y la UI filtra productos por tipo.
 
 Roles y comportamiento esperado
 - ADMIN: puede crear/editar/borrar productos, ajustar stock, asociar productos a servicios. Recibe alertas cuando stock <= umbral.
-- EMPLOYEE: solo consultar catálogo y stock; no modifica.
+- EMPLOYEE: puede consultar y CRUDear productos dentro de sus categorías habilitadas; el resto no se muestra en su UI.
 - USER: no accede a CRUD; solo verá productos incluidos en su servicio/reserva (si se implementa la visualización).
 
 Experiencia cliente

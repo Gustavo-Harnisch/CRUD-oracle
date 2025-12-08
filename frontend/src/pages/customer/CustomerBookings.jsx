@@ -533,10 +533,13 @@ const CustomerBookings = () => {
             <div className="col-lg-4">
               <div className="card shadow-sm h-100">
                 <div className="card-body">
-                  <h2 className="h6 mb-3">Agregar servicio</h2>
+                  <h2 className="h6 mb-3">Solicitar paquete</h2>
+                  <p className="text-muted small mb-3">
+                    Paquetes armados por el staff (servicios + productos incluidos). Solo elige fecha, bloque y cantidad.
+                  </p>
                   <form className="row g-2" onSubmit={handleAddService}>
                     <div className="col-12">
-                      <label className="form-label">Servicio</label>
+                      <label className="form-label">Paquete</label>
                       <select
                         className="form-select"
                         value={serviceForm.serviceId}
@@ -575,7 +578,7 @@ const CustomerBookings = () => {
                           </option>
                         ))}
                       </select>
-                      <small className="text-muted">Se muestran solo los bloques permitidos por el servicio.</small>
+                      <small className="text-muted">Se muestran solo los bloques permitidos por el paquete.</small>
                     </div>
                     <div className="col-6">
                       <label className="form-label">Cantidad</label>
@@ -597,7 +600,7 @@ const CustomerBookings = () => {
                         rows={2}
                         value={serviceForm.nota}
                         onChange={(e) => setServiceForm((prev) => ({ ...prev, nota: e.target.value }))}
-                        placeholder="Ej: toallas extra"
+                        placeholder="Ej: horario preferido"
                       />
                     </div>
                     <div className="col-12">
@@ -616,7 +619,7 @@ const CustomerBookings = () => {
               <div className="card shadow-sm h-100">
                 <div className="card-body">
                   <div className="d-flex justify-content-between align-items-center mb-2">
-                    <h2 className="h6 mb-0">Servicios en la reserva</h2>
+                    <h2 className="h6 mb-0">Paquetes en la reserva</h2>
                     {loadingServices && <span className="text-muted small">Actualizando...</span>}
                   </div>
                   {reservationServices.length > 0 ? (
@@ -626,7 +629,7 @@ const CustomerBookings = () => {
                           <tr>
                             <th>Fecha</th>
                             <th>Hora</th>
-                            <th>Servicio</th>
+                            <th>Paquete</th>
                             <th>Cant</th>
                             <th>Subtotal</th>
                             <th>Estado</th>

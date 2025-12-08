@@ -18,6 +18,12 @@ export const changeServiceStatus = (id, estado) =>
 export const fetchServiceProducts = (serviceId) =>
   api.get(`/services/${serviceId}/products`).then((res) => res.data);
 
+export const fetchPackageServices = (serviceId) =>
+  api.get(`/services/${serviceId}/included-services`).then((res) => res.data);
+
+export const replacePackageServices = (serviceId, items) =>
+  api.put(`/services/${serviceId}/included-services`, items).then((res) => res.data);
+
 export const fetchServiceCategories = () => api.get("/services/categories").then((res) => res.data);
 
 export default {
@@ -27,5 +33,7 @@ export default {
   deleteService,
   changeServiceStatus,
   fetchServiceProducts,
+  fetchPackageServices,
+  replacePackageServices,
   fetchServiceCategories,
 };

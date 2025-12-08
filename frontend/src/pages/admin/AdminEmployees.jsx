@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createEmployee, deleteEmployee, listEmployees, updateEmployee } from "../../services/employeeService";
 import { listDepartments } from "../../services/departmentService";
+import { fetchServiceCategories } from "../../services/serviceService";
 import { useAuth } from "../../context/AuthContext";
 
 const emptyForm = {
@@ -12,6 +13,8 @@ const emptyForm = {
   estado: "ACTIVO",
   departamento: "",
   fechaContratacion: "",
+  habilidadesServicios: [],
+  habilidadesProductos: [],
 };
 
 const AdminEmployees = () => {
@@ -24,6 +27,8 @@ const AdminEmployees = () => {
   const [editingId, setEditingId] = useState(null);
   const [highlightMissing, setHighlightMissing] = useState(true);
   const [departments, setDepartments] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [categoriesError, setCategoriesError] = useState("");
 
   const load = async () => {
     setLoading(true);
@@ -47,6 +52,7 @@ const AdminEmployees = () => {
   useEffect(() => {
     load();
     loadDepartments();
+    loadCategories();
   }, []);
 
   const loadDepartments = async () => {
@@ -55,6 +61,18 @@ const AdminEmployees = () => {
       setDepartments(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error("No se pudieron cargar departamentos", err);
+    }
+  };
+
+  const loadCategories = async () => {
+    setCategoriesError("");
+    try {
+      const data = await fetchServiceCategories();
+      setCategories(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("No se pudieron cargar categorías de servicios/productos", err);
+      setCategoriesError("No se pudieron cargar categorías, usa agregar manual.");
+      setCategories([]);
     }
   };
 
@@ -73,6 +91,8 @@ const AdminEmployees = () => {
 
   const handleEdit = (emp) => {
     setEditingId(emp.id || null);
+    const servicios = (emp.habilidades || []).filter((h) => (h.tipo || "").toUpperCase() === "SERVICIO").map((h) => h.categoria);
+    const productos = (emp.habilidades || []).filter((h) => (h.tipo || "").toUpperCase() === "PRODUCTO").map((h) => h.categoria);
     setForm({
       usuarioId: emp.usuarioId || "",
       nombre: emp.nombre,
@@ -82,6 +102,8 @@ const AdminEmployees = () => {
       estado: emp.estadoLaboral || emp.estado || "ACTIVO",
       departamento: emp.departamentoId ? String(emp.departamentoId) : emp.departamento || "NONE",
       fechaContratacion: emp.fechaContratacion ? emp.fechaContratacion.slice(0, 10) : "",
+      habilidadesServicios: servicios,
+      habilidadesProductos: productos,
     });
   };
 
@@ -90,11 +112,40 @@ const AdminEmployees = () => {
     setForm(emptyForm);
   };
 
+  const toggleHabilidad = (categoria, tipo) => {
+    const key = tipo === "PRODUCTO" ? "habilidadesProductos" : "habilidadesServicios";
+    setForm((prev) => {
+      const current = new Set(prev[key]);
+      if (current.has(categoria)) {
+        current.delete(categoria);
+      } else {
+        current.add(categoria);
+      }
+      return { ...prev, [key]: Array.from(current) };
+    });
+  };
+
+  const handleAddCategoria = () => {
+    const name = window.prompt("Nombre de la categoría (se guardará en MAYÚSCULAS):");
+    if (name === null) return;
+    const normalized = (name || "").trim().toUpperCase();
+    if (!normalized) return;
+    setCategories((prev) => {
+      const set = new Set(prev || []);
+      set.add(normalized);
+      return Array.from(set);
+    });
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
     setLoading(true);
     try {
+      const habilidades = [
+        ...form.habilidadesServicios.map((c) => ({ categoria: c, tipo: "SERVICIO" })),
+        ...form.habilidadesProductos.map((c) => ({ categoria: c, tipo: "PRODUCTO" })),
+      ];
       const payload = {
         usuarioId: Number(form.usuarioId),
         cargo: form.rol,
@@ -102,6 +153,7 @@ const AdminEmployees = () => {
         fechaContratacion: form.fechaContratacion || new Date().toISOString().slice(0, 10),
         departamentoId: form.departamento && form.departamento !== "NONE" ? Number(form.departamento) : null,
         estadoLaboral: form.estado,
+        habilidades,
       };
       if (editingId) {
         await updateEmployee(editingId, payload);
@@ -242,6 +294,64 @@ const AdminEmployees = () => {
                     <option value="INACTIVO">Inactivo</option>
                   </select>
                 </div>
+                <div className="col-12">
+                  <label className="form-label">Habilidades por tipo</label>
+                  <div className="d-flex gap-2 flex-wrap align-items-center mb-2">
+                    <button type="button" className="btn btn-sm btn-outline-secondary" onClick={handleAddCategoria}>
+                      Agregar categoría
+                    </button>
+                    {categoriesError && <span className="text-danger small">{categoriesError}</span>}
+                  </div>
+                  <div className="row g-2">
+                    <div className="col-md-6">
+                      <div className="border rounded p-2 h-100">
+                        <div className="fw-semibold small mb-2">Servicios</div>
+                        {categories.length === 0 && <div className="text-muted small">Sin categorías cargadas.</div>}
+                        {categories.map((c) => {
+                          const checked = form.habilidadesServicios.includes(c);
+                          return (
+                            <div className="form-check" key={`svc-${c}`}>
+                              <input
+                                className="form-check-input"
+                                type="checkbox"
+                                id={`svc-${c}`}
+                                checked={checked}
+                                onChange={() => toggleHabilidad(c, "SERVICIO")}
+                              />
+                              <label className="form-check-label small" htmlFor={`svc-${c}`}>
+                                {c}
+                              </label>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <div className="col-md-6">
+                      <div className="border rounded p-2 h-100">
+                        <div className="fw-semibold small mb-2">Productos</div>
+                        {categories.length === 0 && <div className="text-muted small">Sin categorías cargadas.</div>}
+                        {categories.map((c) => {
+                          const checked = form.habilidadesProductos.includes(c);
+                          return (
+                            <div className="form-check" key={`prod-${c}`}>
+                              <input
+                                className="form-check-input"
+                                type="checkbox"
+                                id={`prod-${c}`}
+                                checked={checked}
+                                onChange={() => toggleHabilidad(c, "PRODUCTO")}
+                              />
+                              <label className="form-check-label small" htmlFor={`prod-${c}`}>
+                                {c}
+                              </label>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="form-text">Selecciona qué categorías de servicios y productos puede gestionar.</div>
+                </div>
                 <div className="col-12 d-flex gap-2">
                   <button className="btn btn-primary" type="submit" disabled={loading}>
                     Guardar
@@ -335,6 +445,7 @@ const AdminEmployees = () => {
                       <th>Rol/área</th>
                       <th>Email</th>
                       <th>Departamento</th>
+                      <th>Habilidades</th>
                       <th>Sueldo base</th>
                       <th>Estado</th>
                       <th className="text-end">Acciones</th>
@@ -359,6 +470,16 @@ const AdminEmployees = () => {
                           <td className="py-3 text-muted">{e.cargo || e.rol || "—"}</td>
                           <td className="py-3">{e.email}</td>
                           <td className="py-3">{e.departamento || "NONE"}</td>
+                          <td className="py-3">
+                            <div className="d-flex flex-wrap gap-1">
+                              {(e.habilidades || []).map((h, idx) => (
+                                <span key={`${h.tipo}-${h.categoria}-${idx}`} className="badge bg-light text-secondary border">
+                                  {h.tipo === "PRODUCTO" ? "Prod" : "Serv"} · {h.categoria}
+                                </span>
+                              ))}
+                              {(e.habilidades || []).length === 0 && <span className="text-muted small">—</span>}
+                            </div>
+                          </td>
                           <td className="py-3">
                             {e.sueldoBase || e.sueldo
                               ? `$ ${Number(e.sueldoBase || e.sueldo || 0).toLocaleString()}`
