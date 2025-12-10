@@ -17,16 +17,18 @@ const ProtectedRoute = ({ roles = [], children }) => {
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
 
-  if (roles.length > 0 && user) {
-    const userRoles = Array.isArray(user.roles)
+  if (roles.length > 0) {
+    const userRoles = Array.isArray(user?.roles)
       ? user.roles.map((r) => String(r).toUpperCase())
-      : user.role
+      : user?.role
         ? [String(user.role).toUpperCase()]
         : [];
     const required = roles.map((r) => String(r).toUpperCase());
     const hasRequired = required.some((r) => userRoles.includes(r));
+
+    // Si no hay usuario o no tiene los roles requeridos, redirigimos.
     if (!hasRequired) {
-      return <Navigate to="/" replace />;
+      return <Navigate to="/login" replace state={{ from: location }} />;
     }
   }
 

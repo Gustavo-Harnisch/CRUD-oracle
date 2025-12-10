@@ -32,6 +32,7 @@ const NAV_VARIANTS = {
     { to: "/admin", label: "Dashboard" },
     { to: "/admin/inventory", label: "Inventario" },
     { to: "/admin/rooms", label: "Habitaciones" },
+    { to: "/admin/reservations", label: "Reservas" },
     { to: "/admin/services", label: "Servicios" },
     { to: "/admin/users", label: "Usuarios" },
     { to: "/admin/employees", label: "Empleados" },

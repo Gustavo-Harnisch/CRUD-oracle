@@ -17,6 +17,11 @@ export const changeRoomStatus = (id, estado) =>
 
 export const fetchRoomTypes = () => api.get("/rooms/types").then((res) => res.data);
 
+export const transferRoomReservation = (id, newUserId) =>
+  api.post(`/rooms/${id}/transfer`, { newUserId }).then((res) => res.data);
+
+export const clearRoom = (id) => api.post(`/rooms/${id}/clear`).then((res) => res.data);
+
 export const createRoomType = (nombre) =>
   api.post("/rooms/types", { nombre }).then((res) => res.data);
 
@@ -27,5 +32,7 @@ export default {
   deleteRoom,
   changeRoomStatus,
   fetchRoomTypes,
+  transferRoomReservation,
+  clearRoom,
   createRoomType,
 };

@@ -44,6 +44,7 @@ const LoginPage = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRegisterMode, setIsRegisterMode] = useState(false);
   const [error, setError] = useState(null);
+  const [fieldErrors, setFieldErrors] = useState({});
 
   const handleChange = (event) => {
     const { name, value } = event.target;
@@ -51,23 +52,26 @@ const LoginPage = () => {
   };
 
   const validateRegister = () => {
+    const errors = {};
     const rutDigits = formData.rut.replace(/\D/g, "");
     if (!rutDigits || !rutRegex.test(rutDigits)) {
-      return "RUT inválido. Usa 7-8 dígitos sin puntos ni dígito verificador.";
+      errors.rut = "RUT inválido. Usa 7-8 dígitos sin puntos ni dígito verificador.";
     }
     if (!formData.name.trim() || !formData.apellido1.trim()) {
-      return "Nombre y apellido paterno son obligatorios.";
+      if (!formData.name.trim()) errors.name = "Nombre es obligatorio.";
+      if (!formData.apellido1.trim()) errors.apellido1 = "Apellido paterno es obligatorio.";
     }
     if (!formData.email.trim() || !formData.password) {
-      return "Correo y contraseña son obligatorios.";
+      if (!formData.email.trim()) errors.email = "Correo es obligatorio.";
+      if (!formData.password) errors.password = "Contraseña es obligatoria.";
     }
     if (formData.password !== formData.confirmPassword) {
-      return "Las contraseñas no coinciden.";
+      errors.confirmPassword = "Las contraseñas no coinciden.";
     }
     if (formData.telefono && !phoneRegex.test(formData.telefono.trim())) {
-      return "Teléfono inválido, usa 7-15 dígitos sin símbolos.";
+      errors.telefono = "Teléfono inválido, usa 7-15 dígitos sin símbolos.";
     }
-    return null;
+    return errors;
   };
 
   const resolveRedirect = (roles) => {
@@ -79,11 +83,22 @@ const LoginPage = () => {
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError(null);
+    setFieldErrors({});
 
     if (isRegisterMode) {
       const validationError = validateRegister();
-      if (validationError) {
-        setError(validationError);
+      if (Object.keys(validationError).length > 0) {
+        setFieldErrors(validationError);
+        setError(Object.values(validationError)[0]);
+        return;
+      }
+    } else {
+      const loginErrors = {};
+      if (!formData.email.trim()) loginErrors.email = "Correo es obligatorio.";
+      if (!formData.password) loginErrors.password = "Contraseña es obligatoria.";
+      if (Object.keys(loginErrors).length > 0) {
+        setFieldErrors(loginErrors);
+        setError(Object.values(loginErrors)[0]);
         return;
       }
     }
@@ -103,8 +118,8 @@ const LoginPage = () => {
             email: formData.email,
             password: formData.password,
             role: "USER",
-        }
-      : { email: formData.email, password: formData.password };
+          }
+        : { email: formData.email, password: formData.password };
 
       const auth = await action(payload);
       const userRoles = Array.isArray(auth?.user?.roles)
@@ -136,17 +151,18 @@ const LoginPage = () => {
                 type="button"
                 className="btn btn-link p-0"
                 onClick={() => {
-                  setIsRegisterMode((prev) => !prev);
-                  setFormData((prev) => ({
-                    ...initialFormState,
-                    email: prev.email,
-                  }));
-                  setError(null);
-                }}
-              >
-                {isRegisterMode ? "¿Ya tienes cuenta? Inicia sesión" : "¿Nuevo? Crea una cuenta"}
-              </button>
-            }
+              setIsRegisterMode((prev) => !prev);
+              setFormData((prev) => ({
+                ...initialFormState,
+                email: prev.email,
+              }));
+              setError(null);
+              setFieldErrors({});
+            }}
+          >
+            {isRegisterMode ? "¿Ya tienes cuenta? Inicia sesión" : "¿Nuevo? Crea una cuenta"}
+          </button>
+        }
           >
             <form onSubmit={handleSubmit}>
           {isRegisterMode && (
@@ -162,6 +178,7 @@ const LoginPage = () => {
                 onChange={handleChange}
                 required
                 placeholder="Ej: 12345678"
+                className={fieldErrors.rut ? "is-invalid" : ""}
               />
               <FormField
                 id="name"
@@ -171,6 +188,7 @@ const LoginPage = () => {
                 value={formData.name}
                 onChange={handleChange}
                 required
+                className={fieldErrors.name ? "is-invalid" : ""}
               />
               <FormField
                 id="apellido1"
@@ -180,6 +198,7 @@ const LoginPage = () => {
                 value={formData.apellido1}
                 onChange={handleChange}
                 required
+                className={fieldErrors.apellido1 ? "is-invalid" : ""}
               />
               <FormField
                 id="apellido2"
@@ -197,6 +216,7 @@ const LoginPage = () => {
                 value={formData.telefono}
                 onChange={handleChange}
                 required={false}
+                className={fieldErrors.telefono ? "is-invalid" : ""}
               />
             </>
           )}
@@ -209,6 +229,7 @@ const LoginPage = () => {
             value={formData.email}
             onChange={handleChange}
             required
+            className={fieldErrors.email ? "is-invalid" : ""}
           />
 
           <PasswordField
@@ -218,6 +239,7 @@ const LoginPage = () => {
             value={formData.password}
             onChange={handleChange}
             required
+            isInvalid={fieldErrors.password}
           />
 
           {isRegisterMode && (
@@ -228,6 +250,7 @@ const LoginPage = () => {
               value={formData.confirmPassword}
               onChange={handleChange}
               required
+              isInvalid={fieldErrors.confirmPassword}
             />
           )}
 

@@ -15,7 +15,7 @@ const SQL_EMPLOYEE_LIST = `
            u.NOMBRE_USUARIO || ' ' || NVL(u.APELLIDO1_USUARIO, '') || ' ' || NVL(u.APELLIDO2_USUARIO, '') AS NOMBRE_COMPLETO,
            u.EMAIL_USUARIO AS EMAIL,
            e.COD_DEPARTAMENTO,
-           'NONE' AS DEPARTAMENTO,
+           NVL(d.NOMBRE_DEPARTAMENTO, 'N/D') AS DEPARTAMENTO,
            e.CARGO,
            e.SALARIO AS SUELDO_BASE,
            e.FECHA_CONTRATACION,
@@ -28,6 +28,7 @@ const SQL_EMPLOYEE_LIST = `
     FROM JRGY_EMPLEADO e
     LEFT JOIN JRGY_USUARIO u ON u.COD_USUARIO = e.COD_USUARIO
     LEFT JOIN JRGY_CAT_ESTADO_LABORAL el ON el.COD_ESTADO_LABORAL = e.COD_ESTADO_LABORAL
+    LEFT JOIN JRGY_DEPARTAMENTO d ON d.COD_DEPARTAMENTO = e.COD_DEPARTAMENTO
   ), EMP_ROLE AS (
     SELECT
       NULL AS COD_EMPLEADO,
@@ -65,7 +66,7 @@ const SQL_EMPLOYEE_LIST_NO_SALARY = `
            u.NOMBRE_USUARIO || ' ' || NVL(u.APELLIDO1_USUARIO, '') || ' ' || NVL(u.APELLIDO2_USUARIO, '') AS NOMBRE_COMPLETO,
            u.EMAIL_USUARIO AS EMAIL,
            e.COD_DEPARTAMENTO,
-           'NONE' AS DEPARTAMENTO,
+           NVL(d.NOMBRE_DEPARTAMENTO, 'N/D') AS DEPARTAMENTO,
            e.CARGO,
            NULL AS SUELDO_BASE,
            e.FECHA_CONTRATACION,
@@ -78,6 +79,7 @@ const SQL_EMPLOYEE_LIST_NO_SALARY = `
     FROM JRGY_EMPLEADO e
     LEFT JOIN JRGY_USUARIO u ON u.COD_USUARIO = e.COD_USUARIO
     LEFT JOIN JRGY_CAT_ESTADO_LABORAL el ON el.COD_ESTADO_LABORAL = e.COD_ESTADO_LABORAL
+    LEFT JOIN JRGY_DEPARTAMENTO d ON d.COD_DEPARTAMENTO = e.COD_DEPARTAMENTO
   ), EMP_ROLE AS (
     SELECT
       NULL AS COD_EMPLEADO,
@@ -85,7 +87,7 @@ const SQL_EMPLOYEE_LIST_NO_SALARY = `
       u.NOMBRE_USUARIO || ' ' || NVL(u.APELLIDO1_USUARIO, '') || ' ' || NVL(u.APELLIDO2_USUARIO, '') AS NOMBRE_COMPLETO,
       u.EMAIL_USUARIO AS EMAIL,
       NULL AS COD_DEPARTAMENTO,
-      'NONE' AS DEPARTAMENTO,
+      'N/D' AS DEPARTAMENTO,
       NULL AS CARGO,
       NULL AS SUELDO_BASE,
       NULL AS FECHA_CONTRATACION,
@@ -116,7 +118,7 @@ function mapEmployee(row) {
     nombre: row.NOMBRE_COMPLETO,
     email: row.EMAIL,
     departamentoId: row.COD_DEPARTAMENTO,
-    departamento: row.DEPARTAMENTO || 'NONE',
+    departamento: row.DEPARTAMENTO || 'N/D',
     cargo: row.CARGO,
     sueldoBase: row.SUELDO_BASE,
     fechaContratacion: row.FECHA_CONTRATACION,
@@ -179,6 +181,137 @@ router.get(
           return list.map((e) => ({ ...e, habilidades: habMap.get(e.id) || [] }));
         }
       }
+    });
+
+    res.json(employees);
+  })
+);
+
+// Resumen para dashboard de empleado (estadísticas rápidas)
+router.get(
+  '/employee/dashboard-stats',
+  asyncHandler(async (req, res) => {
+    const token = extractToken(req);
+    const user = await withConnection((conn) => requireUserFromToken(conn, token, false));
+    if (!hasRole(user, ['ADMIN', 'EMPLOYEE'])) throw new AppError('No autorizado', 403);
+
+    const stats = await withConnection(async (conn) => {
+      const result = await conn.execute(
+        `
+          SELECT
+            (SELECT COUNT(*) FROM JRGY_RESERVA r WHERE TRUNC(r.FECHA_INICIO) = TRUNC(SYSDATE)) AS CHECKINS_HOY,
+            (SELECT COUNT(*) FROM JRGY_RESERVA r WHERE TRUNC(r.FECHA_FIN) = TRUNC(SYSDATE)) AS CHECKOUTS_HOY,
+            (
+              SELECT COUNT(*)
+              FROM JRGY_RESERVA_SERVICIO rs
+              WHERE LOWER(NVL(rs.ESTADO, 'pendiente')) NOT IN ('cancelado', 'cancelada', 'finalizado', 'finalizada', 'listo')
+            ) AS PETICIONES_ABIERTAS,
+            (
+              SELECT COUNT(*)
+              FROM JRGY_HABITACION h
+              LEFT JOIN JRGY_CAT_ESTADO_HABITACION eh ON eh.COD_ESTADO_HABITACION = h.COD_ESTADO_HABITACION
+              WHERE UPPER(NVL(eh.ESTADO_HABITACION, '')) IN ('MANTENCION', 'MANTENCIÓN', 'FUERA DE SERVICIO', 'FUERA_SERVICIO', 'OUT OF SERVICE')
+            ) AS ROOMS_OOS
+          FROM dual
+        `
+      );
+      return (result.rows || [])[0] || {};
+    });
+
+    res.json({
+      checkinsToday: Number(stats.CHECKINS_HOY) || 0,
+      checkoutsToday: Number(stats.CHECKOUTS_HOY) || 0,
+      openRequests: Number(stats.PETICIONES_ABIERTAS) || 0,
+      roomsOOS: Number(stats.ROOMS_OOS) || 0
+    });
+  })
+);
+
+// Equipo (mismo departamento que el empleado autenticado)
+router.get(
+  '/employees/team',
+  asyncHandler(async (req, res) => {
+    const token = extractToken(req);
+    const user = await withConnection((conn) => requireUserFromToken(conn, token, false));
+    if (!hasRole(user, ['ADMIN', 'EMPLOYEE'])) throw new AppError('No autorizado', 403);
+
+    const employees = await withConnection(async (conn) => {
+      const depRes = await conn.execute(
+        `SELECT COD_DEPARTAMENTO FROM JRGY_EMPLEADO WHERE COD_USUARIO = :id`,
+        { id: user.id }
+      );
+      const depId = (depRes.rows || [])[0]?.COD_DEPARTAMENTO;
+      if (!depId) return [];
+
+      const result = await conn.execute(
+        `
+          SELECT e.COD_EMPLEADO,
+                 e.COD_USUARIO,
+                 u.NOMBRE_USUARIO || ' ' || NVL(u.APELLIDO1_USUARIO, '') || ' ' || NVL(u.APELLIDO2_USUARIO, '') AS NOMBRE_COMPLETO,
+                 u.EMAIL_USUARIO AS EMAIL,
+                 e.COD_DEPARTAMENTO,
+                 NVL(d.NOMBRE_DEPARTAMENTO, 'N/D') AS DEPARTAMENTO,
+                 e.CARGO,
+                 el.ESTADO_LABORAL
+          FROM JRGY_EMPLEADO e
+          JOIN JRGY_USUARIO u ON u.COD_USUARIO = e.COD_USUARIO
+          LEFT JOIN JRGY_CAT_ESTADO_LABORAL el ON el.COD_ESTADO_LABORAL = e.COD_ESTADO_LABORAL
+          LEFT JOIN JRGY_DEPARTAMENTO d ON d.COD_DEPARTAMENTO = e.COD_DEPARTAMENTO
+          WHERE e.COD_DEPARTAMENTO = :depId
+        `,
+        { depId }
+      );
+      return (result.rows || []).map((r) => ({
+        id: r.COD_EMPLEADO,
+        usuarioId: r.COD_USUARIO,
+        nombre: r.NOMBRE_COMPLETO,
+        email: r.EMAIL,
+        departamentoId: r.COD_DEPARTAMENTO,
+        departamento: r.DEPARTAMENTO,
+        cargo: r.CARGO,
+        estadoLaboral: r.ESTADO_LABORAL
+      }));
+    });
+
+    res.json(employees);
+  })
+);
+
+// Directorio completo (solo empleados) para búsqueda
+router.get(
+  '/employees/directory',
+  asyncHandler(async (req, res) => {
+    const token = extractToken(req);
+    const user = await withConnection((conn) => requireUserFromToken(conn, token, false));
+    if (!hasRole(user, ['ADMIN', 'EMPLOYEE'])) throw new AppError('No autorizado', 403);
+
+    const employees = await withConnection(async (conn) => {
+      const result = await conn.execute(
+        `
+          SELECT e.COD_EMPLEADO,
+                 e.COD_USUARIO,
+                 u.NOMBRE_USUARIO || ' ' || NVL(u.APELLIDO1_USUARIO, '') || ' ' || NVL(u.APELLIDO2_USUARIO, '') AS NOMBRE_COMPLETO,
+                 u.EMAIL_USUARIO AS EMAIL,
+                 e.COD_DEPARTAMENTO,
+                 NVL(d.NOMBRE_DEPARTAMENTO, 'N/D') AS DEPARTAMENTO,
+                 e.CARGO,
+                 el.ESTADO_LABORAL
+          FROM JRGY_EMPLEADO e
+          JOIN JRGY_USUARIO u ON u.COD_USUARIO = e.COD_USUARIO
+          LEFT JOIN JRGY_CAT_ESTADO_LABORAL el ON el.COD_ESTADO_LABORAL = e.COD_ESTADO_LABORAL
+          LEFT JOIN JRGY_DEPARTAMENTO d ON d.COD_DEPARTAMENTO = e.COD_DEPARTAMENTO
+        `
+      );
+      return (result.rows || []).map((r) => ({
+        id: r.COD_EMPLEADO,
+        usuarioId: r.COD_USUARIO,
+        nombre: r.NOMBRE_COMPLETO,
+        email: r.EMAIL,
+        departamentoId: r.COD_DEPARTAMENTO,
+        departamento: r.DEPARTAMENTO,
+        cargo: r.CARGO,
+        estadoLaboral: r.ESTADO_LABORAL
+      }));
     });
 
     res.json(employees);

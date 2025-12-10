@@ -251,45 +251,15 @@ router.post(
       const isAdmin = hasRole(user, ['ADMIN', 'EMPLOYEE']);
       if (!isOwner && !isAdmin) throw new AppError('No autorizado', 403);
 
-      const estadoActual = (reserva.ESTADO_RESERVA || '').toUpperCase();
-      if (estadoActual !== 'CREADA') {
-        throw new AppError('Solo puedes cancelar reservas en estado CREADA', 409);
-      }
-
-      const estadoCancelada = await fetchEstadoReservaId(conn, 'CANCELADA');
-
       try {
         await conn.execute(
-          `
-            UPDATE JRGY_RESERVA
-            SET COD_ESTADO_RESERVA = :estado,
-                UPDATED_AT = SYSDATE
-            WHERE COD_RESERVA = :id
-          `,
-          { estado: estadoCancelada, id },
-          { autoCommit: false }
+          `BEGIN JRGY_PRO_RESERVA_CANCELAR(:resId, :userId); END;`,
+          { resId: id, userId: user.id },
+          { autoCommit: true }
         );
-
-        await conn.execute(
-          `
-            INSERT INTO JRGY_EVENTO_RESERVA (COD_RESERVA, TIPO_EVENTO, FECHA_EVENTO, NOTAS, CREATED_BY)
-            VALUES (:resId, 'CANCELADA', SYSDATE, :notas, :userId)
-          `,
-          {
-            resId: id,
-            notas: 'Reserva cancelada',
-            userId: user.id
-          },
-          { autoCommit: false }
-        );
-
-        await conn.commit();
       } catch (err) {
-        try {
-          await conn.rollback();
-        } catch (rollbackErr) {
-          console.error('Error rollback cancel reservation', rollbackErr);
-        }
+        if (err.errorNum === 20020) throw new AppError('Reserva no encontrada', 404);
+        if (err.errorNum === 20072) throw new AppError('Solo puedes cancelar reservas en estado CREADA', 409);
         throw err;
       }
     });

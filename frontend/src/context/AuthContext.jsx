@@ -45,11 +45,36 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     const stored = loadStoredAuth();
-    if (stored?.token) {
-      setToken(stored.token);
-      setUser(stored.user || null);
-    }
-    setIsLoading(false);
+    let isMounted = true;
+
+    const bootstrapSession = async () => {
+      if (stored?.token) {
+        setToken(stored.token);
+        // Validamos el token contra el backend para evitar sesiones huérfanas o sin roles.
+        try {
+          const { data } = await getProfile();
+          const roles = Array.isArray(data?.roles) ? data.roles : data?.role ? [data.role] : [];
+          const normalizedUser = data ? { ...data, roles } : null;
+          if (isMounted) {
+            setUser(normalizedUser);
+            saveStoredAuth({ token: stored.token, user: normalizedUser });
+          }
+        } catch (err) {
+          if (isMounted) {
+            resetAuthState();
+          }
+        }
+      }
+      if (isMounted) {
+        setIsLoading(false);
+      }
+    };
+
+    bootstrapSession();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const login = async ({ email, password }) => {

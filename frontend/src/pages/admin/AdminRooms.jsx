@@ -6,6 +6,7 @@ import {
   deleteRoom,
   fetchRoomTypes,
   createRoomType,
+  clearRoom,
 } from "../../services/roomService";
 import { useAuth } from "../../context/AuthContext";
 
@@ -15,6 +16,8 @@ const emptyForm = {
   capacidad: 1,
   precioBase: 0,
   estado: "LIBRE",
+  ocupanteId: "",
+  reserva: null,
 };
 
 const AdminRooms = () => {
@@ -109,6 +112,7 @@ const AdminRooms = () => {
         precioBase: Number(form.precioBase),
         tipo: String(form.tipo || "").trim().toUpperCase(),
         estado: String(form.estado || "").trim().toUpperCase(),
+        ocupanteId: form.ocupanteId === "" ? null : Number(form.ocupanteId),
       };
       if (editingId) {
         await updateRoom(editingId, payload);
@@ -116,8 +120,7 @@ const AdminRooms = () => {
         await createRoom(payload);
       }
       await load();
-      setForm(emptyForm);
-      setEditingId(null);
+      resetForm();
     } catch (err) {
       console.error(err);
       const status = err?.response?.status;
@@ -134,6 +137,31 @@ const AdminRooms = () => {
     }
   };
 
+  const handleForceClear = async () => {
+    if (!editingId) return;
+    if (!window.confirm("¿Despejar cuarto? Esto libera la habitación y elimina el ocupante.")) return;
+    setError("");
+    setSaving(true);
+    try {
+      await clearRoom(editingId);
+      await load();
+      resetForm();
+    } catch (err) {
+      console.error(err);
+      const status = err?.response?.status;
+      if (status === 401) {
+        setError("Sesión expirada o sin permisos admin. Inicia sesión nuevamente.");
+        logout();
+        window.location.href = "/login";
+      } else {
+        const message = err?.response?.data?.message || "No se pudo despejar la habitación.";
+        setError(message);
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleEdit = (room) => {
     setEditingId(room.id);
     setForm({
@@ -142,6 +170,8 @@ const AdminRooms = () => {
       capacidad: room.capacidad || 1,
       precioBase: room.precioBase || 0,
       estado: (room.estado || "ACTIVO").toUpperCase(),
+      ocupanteId: room.ocupanteId || "",
+      reserva: room.reserva || null,
     });
   };
 
@@ -216,6 +246,12 @@ const AdminRooms = () => {
     }
   };
 
+  const resetForm = () => {
+    setEditingId(null);
+    setForm(emptyForm);
+    setOriginalOcupanteId(null);
+  };
+
   const handleTypeChange = async (value) => {
     if (value === "__add__") {
       await handleAddType();
@@ -273,8 +309,15 @@ const AdminRooms = () => {
     });
   }, [rooms, filters]);
 
+  const formatDate = (val) => {
+    if (!val) return "";
+    const d = new Date(val);
+    if (Number.isNaN(d.getTime())) return "";
+    return d.toISOString().slice(0, 10);
+  };
+
   return (
-    <div className="container-xxl py-3">
+    <div className="container-xxl px-3 px-md-4 py-3" style={{ maxWidth: "1200px", fontSize: "0.95rem" }}>
       <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-5">
         <div>
           <p className="text-uppercase text-muted small mb-1">Admin · Habitaciones</p>
@@ -299,9 +342,12 @@ const AdminRooms = () => {
       <div className="row g-3 g-xl-4 align-items-start">
         <div className="col-lg-5 col-xl-4">
           <div className="card shadow-sm h-100">
-            <div className="card-body p-4 p-xl-5">
-              <h2 className="h6 mb-4">{editingId ? "Editar habitación" : "Nueva habitación"}</h2>
-              <form className="row g-4" onSubmit={handleSubmit}>
+            <div className="card-body p-4">
+              <div className="d-flex justify-content-between align-items-start mb-2">
+                <h2 className="h6 mb-0">{editingId ? "Editar habitación" : "Nueva habitación"}</h2>
+                <span className="badge bg-secondary-subtle text-secondary border">{editingId ? "Edición" : "Nuevo"}</span>
+              </div>
+              <form className="row g-3" onSubmit={handleSubmit}>
                 <div className="col-12">
                   <label className="form-label">Número</label>
                   <input
@@ -345,12 +391,12 @@ const AdminRooms = () => {
                       {creatingType ? "Guardando..." : "Agregar"}
                     </button>
                   </div>
-                  <div className="d-flex flex-wrap justify-content-between align-items-center mt-1">
+                  <div className="d-flex flex-wrap justify-content-between align-items-center mt-2">
                     <div className="form-text mb-0">
                       {typesLoading && <span className="text-muted">Cargando tipos...</span>}
                       {typesError && <span className="text-danger">{typesError}</span>}
                       {!typesLoading && !typesError && (
-                        <span className="text-muted">Usa la lista o agrega uno nuevo (se almacena en MAYÚSCULAS).</span>
+                        <span className="text-muted">Usa la lista o agrega uno nuevo (MAYÚSCULAS).</span>
                       )}
                     </div>
                     {!typesLoading && (
@@ -402,7 +448,36 @@ const AdminRooms = () => {
                     <option value="MANTENCION">Mantención</option>
                   </select>
                 </div>
-                <div className="col-12 d-flex gap-2">
+                {editingId && form?.reserva && (
+                  <div className="col-12">
+                    <div className="border rounded p-3 bg-light">
+                      <div className="fw-semibold mb-2 d-flex justify-content-between align-items-center">
+                        <span>Reserva actual</span>
+                        <span className="text-muted small">ID reserva: {form.reserva.id}</span>
+                      </div>
+                      <div className="row g-2 small">
+                        <div className="col-12">
+                          <div className="text-muted">Estado: {form.reserva.estado}</div>
+                        </div>
+                        <div className="col-12">
+                          <div className="fw-semibold">
+                            {formatDate(form.reserva.fechaInicio)} → {formatDate(form.reserva.fechaFin)}
+                          </div>
+                          <div className="d-flex flex-column">
+                            <span>{form.reserva.usuarioNombre || `Usuario ${form.reserva.usuarioId}`}</span>
+                            <span className="text-muted">Usuario ID: {form.reserva.usuarioId || "—"}</span>
+                            <span className="text-muted">{form.reserva.usuarioEmail}</span>
+                          </div>
+                          <div className="text-muted">Huéspedes: {form.reserva.huespedes || "—"}</div>
+                        </div>
+                      </div>
+                      <div className="mt-2 text-muted small">
+                        Usa “Despejar cuarto” para finalizar o ajusta estado/ocupante según corresponda.
+                      </div>
+                    </div>
+                  </div>
+                )}
+                <div className="col-12 d-flex flex-wrap gap-2">
                   <button className="btn btn-primary" type="submit" disabled={saving || creatingType || !canManage}>
                     {saving ? "Guardando..." : editingId ? "Actualizar" : "Crear"}
                   </button>
@@ -410,13 +485,20 @@ const AdminRooms = () => {
                     <button
                       type="button"
                       className="btn btn-outline-secondary"
-                      onClick={() => {
-                        setEditingId(null);
-                        setForm(emptyForm);
-                      }}
+                      onClick={resetForm}
                       disabled={saving || creatingType || !canManage}
                     >
                       Cancelar edición
+                    </button>
+                  )}
+                  {editingId && (
+                    <button
+                      type="button"
+                      className="btn btn-warning ms-auto"
+                      onClick={handleForceClear}
+                      disabled={saving || creatingType || !canManage}
+                    >
+                      Despejar cuarto
                     </button>
                   )}
                 </div>
@@ -427,7 +509,7 @@ const AdminRooms = () => {
 
         <div className="col-lg-7 col-xl-8">
           <div className="card shadow-sm h-100">
-            <div className="card-body p-4 p-xl-5">
+            <div className="card-body p-3 p-lg-4">
               <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
                 <div>
                   <h2 className="h6 mb-1">Listado</h2>
@@ -530,27 +612,56 @@ const AdminRooms = () => {
               {loading ? (
                 <p className="text-muted">Cargando habitaciones...</p>
               ) : (
-                <div className="table-responsive">
+                <div className="table-responsive" style={{ width: "100%" }}>
                   <table className="table table-striped table-hover align-middle">
                     <thead>
                       <tr>
-                        <th>#</th>
-                        <th>Número</th>
-                        <th>Tipo</th>
-                        <th>Capacidad</th>
-                        <th>Precio base</th>
-                        <th>Estado</th>
-                        <th className="text-end">Acciones</th>
+                        <th className="text-nowrap" style={{ width: "6%" }}>#</th>
+                        <th className="text-nowrap" style={{ width: "10%" }}>Número</th>
+                        <th className="text-nowrap" style={{ width: "16%" }}>Tipo</th>
+                        <th className="text-nowrap" style={{ width: "10%" }}>Capacidad</th>
+                        <th className="text-nowrap text-end" style={{ width: "12%" }}>Precio base</th>
+                        <th className="text-nowrap" style={{ width: "22%" }}>Ocupante</th>
+                        <th className="text-nowrap" style={{ width: "9%" }}>Estado</th>
+                        <th className="text-end text-nowrap" style={{ width: "6%" }}>
+                          Acciones
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
                       {filtered.map((room) => (
                         <tr key={room.id} className="align-middle">
-                          <td className="py-3">{room.id}</td>
-                          <td className="py-3 fw-semibold">{room.numero}</td>
-                          <td className="py-3 text-muted">{room.tipo}</td>
-                          <td className="py-3">{room.capacidad}</td>
-                          <td className="py-3">$ {Number(room.precioBase || 0).toLocaleString()}</td>
+                          <td className="py-3 text-muted">{room.id}</td>
+                          <td className="py-3 fw-semibold text-truncate">{room.numero}</td>
+                          <td className="py-3 text-muted text-truncate">{room.tipo}</td>
+                          <td className="py-3 text-truncate">{room.capacidad}</td>
+                          <td className="py-3 text-end text-truncate">$ {Number(room.precioBase || 0).toLocaleString()}</td>
+                          <td className="py-3" style={{ maxWidth: "260px" }}>
+                            {room.reserva?.usuarioId ? (
+                              <div className="d-flex flex-column gap-1">
+                                <span className="fw-semibold text-truncate" title={room.reserva.usuarioNombre || `Usuario ${room.reserva.usuarioId}`}>
+                                  {room.reserva.usuarioNombre || `Usuario ${room.reserva.usuarioId}`}
+                                </span>
+                                <small className="text-muted text-truncate" title={room.reserva.usuarioEmail || `ID: ${room.reserva.usuarioId}`}>
+                                  {room.reserva.usuarioEmail || `ID: ${room.reserva.usuarioId}`}
+                                </small>
+                                <small className="text-muted text-nowrap">
+                                  {formatDate(room.reserva.fechaInicio)} → {formatDate(room.reserva.fechaFin)}
+                                </small>
+                              </div>
+                            ) : room.ocupanteId ? (
+                              <div className="d-flex flex-column gap-1">
+                                <span className="fw-semibold text-truncate" title={room.ocupanteNombre || `Usuario ${room.ocupanteId}`}>
+                                  {room.ocupanteNombre || `Usuario ${room.ocupanteId}`}
+                                </span>
+                                <small className="text-muted text-truncate" title={room.ocupanteEmail || `ID: ${room.ocupanteId}`}>
+                                  {room.ocupanteEmail || `ID: ${room.ocupanteId}`}
+                                </small>
+                              </div>
+                            ) : (
+                              <span className="text-muted small">NONE</span>
+                            )}
+                          </td>
                           <td className="py-3">
                             <span
                               className={

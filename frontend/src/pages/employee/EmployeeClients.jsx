@@ -428,9 +428,6 @@ const EmployeeClients = () => {
               <h2 className="h6 mb-1">Salidas / check-out</h2>
               <p className="text-muted small mb-0">Confirma pagos, devoluciones y transporte.</p>
             </div>
-            <button type="button" className="btn btn-outline-secondary btn-sm" disabled>
-              Notificar housekeeping
-            </button>
           </div>
           {loading ? (
             <p className="text-muted mb-0">Cargando reservas...</p>

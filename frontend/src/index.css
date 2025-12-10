@@ -34,6 +34,11 @@ body {
   padding-top: var(--nav-offset);
 }
 
+/* Las páginas de autenticación no usan navbar; eliminamos el offset para evitar el gap superior */
+body.auth-layout {
+  padding-top: 0;
+}
+
 /* Enlaces: deja que Bootstrap maneje el color, sólo quitamos subrayado */
 a {
   text-decoration: none;

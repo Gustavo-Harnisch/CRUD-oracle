@@ -25,6 +25,13 @@ const statusBadge = (status = "") => {
 
 const parseDate = (value) => {
   if (!value) return null;
+  // Evita desfases por zona horaria parseando la fecha (YYYY-MM-DD) en local.
+  const parts = String(value).slice(0, 10).split("-");
+  if (parts.length === 3) {
+    const [y, m, d] = parts.map((p) => Number(p));
+    const date = new Date(y, m - 1, d);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
   const d = new Date(value);
   return Number.isNaN(d.getTime()) ? null : d;
 };
@@ -404,6 +411,8 @@ const CustomerBookings = () => {
     }
   };
 
+  const showPackagesSection = false;
+
   return (
     <div className="container py-4">
       <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-3">
@@ -529,158 +538,160 @@ const CustomerBookings = () => {
             requestingCheckout={requestingCheckout}
           />
 
-          <div className="row g-3 mt-2">
-            <div className="col-lg-4">
-              <div className="card shadow-sm h-100">
-                <div className="card-body">
-                  <h2 className="h6 mb-3">Solicitar paquete</h2>
-                  <p className="text-muted small mb-3">
-                    Paquetes armados por el staff (servicios + productos incluidos). Solo elige fecha, bloque y cantidad.
-                  </p>
-                  <form className="row g-2" onSubmit={handleAddService}>
-                    <div className="col-12">
-                      <label className="form-label">Paquete</label>
-                      <select
-                        className="form-select"
-                        value={serviceForm.serviceId}
-                        onChange={(e) => setServiceForm((prev) => ({ ...prev, serviceId: e.target.value }))}
-                      >
-                        {servicesCatalog.map((svc) => (
-                          <option key={svc.id} value={svc.id}>
-                            {svc.nombre} (${Number(svc.precio || 0).toLocaleString()})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="col-6">
-                      <label className="form-label">Fecha</label>
-                      <input
-                        type="date"
-                        className="form-control"
-                        value={serviceForm.fecha}
-                        min={selectedBooking.start?.slice(0, 10)}
-                        max={selectedBooking.end?.slice(0, 10)}
-                        onChange={(e) => setServiceForm((prev) => ({ ...prev, fecha: e.target.value }))}
-                        required
-                      />
-                    </div>
-                    <div className="col-6">
-                      <label className="form-label">Bloque horario</label>
-                      <select
-                        className="form-select"
-                        value={serviceForm.hora}
-                        onChange={(e) => setServiceForm((prev) => ({ ...prev, hora: Number(e.target.value) }))}
-                        required
-                      >
-                        {blockOptions.map((b) => (
-                          <option key={b.value} value={b.value}>
-                            {b.label}
-                          </option>
-                        ))}
-                      </select>
-                      <small className="text-muted">Se muestran solo los bloques permitidos por el paquete.</small>
-                    </div>
-                    <div className="col-6">
-                      <label className="form-label">Cantidad</label>
-                      <input
-                        type="number"
-                        min="1"
-                        className="form-control"
-                        value={serviceForm.cantidad}
-                        onChange={(e) =>
-                          setServiceForm((prev) => ({ ...prev, cantidad: Number(e.target.value) || 1 }))
-                        }
-                        required
-                      />
-                    </div>
-                    <div className="col-12">
-                      <label className="form-label">Notas</label>
-                      <textarea
-                        className="form-control"
-                        rows={2}
-                        value={serviceForm.nota}
-                        onChange={(e) => setServiceForm((prev) => ({ ...prev, nota: e.target.value }))}
-                        placeholder="Ej: horario preferido"
-                      />
-                    </div>
-                    <div className="col-12">
-                      <button className="btn btn-primary w-100" type="submit" disabled={savingService}>
-                        {savingService ? "Guardando..." : "Agregar"}
-                      </button>
-                    </div>
-                  </form>
-                  <small className="text-muted d-block mt-2">
-                    Solo puedes agendar dentro de las fechas de tu reserva.
-                  </small>
-                </div>
-              </div>
-            </div>
-            <div className="col-lg-8">
-              <div className="card shadow-sm h-100">
-                <div className="card-body">
-                  <div className="d-flex justify-content-between align-items-center mb-2">
-                    <h2 className="h6 mb-0">Paquetes en la reserva</h2>
-                    {loadingServices && <span className="text-muted small">Actualizando...</span>}
-                  </div>
-                  {reservationServices.length > 0 ? (
-                    <div className="table-responsive">
-                      <table className="table table-striped align-middle">
-                        <thead>
-                          <tr>
-                            <th>Fecha</th>
-                            <th>Hora</th>
-                            <th>Paquete</th>
-                            <th>Cant</th>
-                            <th>Subtotal</th>
-                            <th>Estado</th>
-                            <th />
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {reservationServices.map((item) => (
-                            <tr key={item.id}>
-                              <td>{(item.fecha || "").slice(0, 10)}</td>
-                              <td>{String(item.hora).padStart(2, "0")}:00</td>
-                              <td>
-                                <div className="fw-semibold">{item.servicioNombre}</div>
-                                <small className="text-muted">{item.nota || "Sin notas"}</small>
-                              </td>
-                              <td>{item.cantidad}</td>
-                              <td>$ {Number(item.total || 0).toLocaleString()}</td>
-                              <td>
-                                <span
-                                  className={
-                                    item.estado === "cancelado"
-                                      ? "badge bg-danger-subtle text-danger border"
-                                      : "badge bg-success-subtle text-success border"
-                                  }
-                                >
-                                  {item.estado}
-                                </span>
-                              </td>
-                              <td className="text-end">
-                                {item.estado !== "cancelado" && (
-                                  <button
-                                    type="button"
-                                    className="btn btn-outline-danger btn-sm"
-                                    onClick={() => handleCancelService(item.id)}
-                                  >
-                                    Cancelar
-                                  </button>
-                                )}
-                              </td>
-                            </tr>
+          {showPackagesSection ? (
+            <div className="row g-3 mt-2">
+              <div className="col-lg-4">
+                <div className="card shadow-sm h-100">
+                  <div className="card-body">
+                    <h2 className="h6 mb-3">Solicitar paquete</h2>
+                    <p className="text-muted small mb-3">
+                      Paquetes armados por el staff (servicios + productos incluidos). Solo elige fecha, bloque y cantidad.
+                    </p>
+                    <form className="row g-2" onSubmit={handleAddService}>
+                      <div className="col-12">
+                        <label className="form-label">Paquete</label>
+                        <select
+                          className="form-select"
+                          value={serviceForm.serviceId}
+                          onChange={(e) => setServiceForm((prev) => ({ ...prev, serviceId: e.target.value }))}
+                        >
+                          {servicesCatalog.map((svc) => (
+                            <option key={svc.id} value={svc.id}>
+                              {svc.nombre} (${Number(svc.precio || 0).toLocaleString()})
+                            </option>
                           ))}
-                        </tbody>
-                      </table>
+                        </select>
+                      </div>
+                      <div className="col-6">
+                        <label className="form-label">Fecha</label>
+                        <input
+                          type="date"
+                          className="form-control"
+                          value={serviceForm.fecha}
+                          min={selectedBooking.start?.slice(0, 10)}
+                          max={selectedBooking.end?.slice(0, 10)}
+                          onChange={(e) => setServiceForm((prev) => ({ ...prev, fecha: e.target.value }))}
+                          required
+                        />
+                      </div>
+                      <div className="col-6">
+                        <label className="form-label">Bloque horario</label>
+                        <select
+                          className="form-select"
+                          value={serviceForm.hora}
+                          onChange={(e) => setServiceForm((prev) => ({ ...prev, hora: Number(e.target.value) }))}
+                          required
+                        >
+                          {blockOptions.map((b) => (
+                            <option key={b.value} value={b.value}>
+                              {b.label}
+                            </option>
+                          ))}
+                        </select>
+                        <small className="text-muted">Se muestran solo los bloques permitidos por el paquete.</small>
+                      </div>
+                      <div className="col-6">
+                        <label className="form-label">Cantidad</label>
+                        <input
+                          type="number"
+                          min="1"
+                          className="form-control"
+                          value={serviceForm.cantidad}
+                          onChange={(e) =>
+                            setServiceForm((prev) => ({ ...prev, cantidad: Number(e.target.value) || 1 }))
+                          }
+                          required
+                        />
+                      </div>
+                      <div className="col-12">
+                        <label className="form-label">Notas</label>
+                        <textarea
+                          className="form-control"
+                          rows={2}
+                          value={serviceForm.nota}
+                          onChange={(e) => setServiceForm((prev) => ({ ...prev, nota: e.target.value }))}
+                          placeholder="Ej: horario preferido"
+                        />
+                      </div>
+                      <div className="col-12">
+                        <button className="btn btn-primary w-100" type="submit" disabled={savingService}>
+                          {savingService ? "Guardando..." : "Agregar"}
+                        </button>
+                      </div>
+                    </form>
+                    <small className="text-muted d-block mt-2">
+                      Solo puedes agendar dentro de las fechas de tu reserva.
+                    </small>
+                  </div>
+                </div>
+              </div>
+              <div className="col-lg-8">
+                <div className="card shadow-sm h-100">
+                  <div className="card-body">
+                    <div className="d-flex justify-content-between align-items-center mb-2">
+                      <h2 className="h6 mb-0">Paquetes en la reserva</h2>
+                      {loadingServices && <span className="text-muted small">Actualizando...</span>}
                     </div>
-                  ) : (
-                    <p className="text-muted mb-0">Aún no agregas servicios a esta reserva.</p>
-                  )}
+                    {reservationServices.length > 0 ? (
+                      <div className="table-responsive">
+                        <table className="table table-striped align-middle">
+                          <thead>
+                            <tr>
+                              <th>Fecha</th>
+                              <th>Hora</th>
+                              <th>Paquete</th>
+                              <th>Cant</th>
+                              <th>Subtotal</th>
+                              <th>Estado</th>
+                              <th />
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {reservationServices.map((item) => (
+                              <tr key={item.id}>
+                                <td>{(item.fecha || "").slice(0, 10)}</td>
+                                <td>{String(item.hora).padStart(2, "0")}:00</td>
+                                <td>
+                                  <div className="fw-semibold">{item.servicioNombre}</div>
+                                  <small className="text-muted">{item.nota || "Sin notas"}</small>
+                                </td>
+                                <td>{item.cantidad}</td>
+                                <td>$ {Number(item.total || 0).toLocaleString()}</td>
+                                <td>
+                                  <span
+                                    className={
+                                      item.estado === "cancelado"
+                                        ? "badge bg-danger-subtle text-danger border"
+                                        : "badge bg-success-subtle text-success border"
+                                    }
+                                  >
+                                    {item.estado}
+                                  </span>
+                                </td>
+                                <td className="text-end">
+                                  {item.estado !== "cancelado" && (
+                                    <button
+                                      type="button"
+                                      className="btn btn-outline-danger btn-sm"
+                                      onClick={() => handleCancelService(item.id)}
+                                    >
+                                      Cancelar
+                                    </button>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <p className="text-muted mb-0">Aún no agregas servicios a esta reserva.</p>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
+          ) : null}
         </>
       )}
     </div>

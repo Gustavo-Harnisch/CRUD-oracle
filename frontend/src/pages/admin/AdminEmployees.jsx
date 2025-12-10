@@ -437,18 +437,16 @@ const AdminEmployees = () => {
               </div>
 
               <div className="table-responsive">
-                <table className="table table-striped table-hover align-middle">
+                <table className="table table-hover align-middle">
                   <thead>
                     <tr>
                       <th>#</th>
-                      <th>Nombre</th>
-                      <th>Rol/área</th>
-                      <th>Email</th>
-                      <th>Departamento</th>
-                      <th>Habilidades</th>
-                      <th>Sueldo base</th>
-                      <th>Estado</th>
-                      <th className="text-end">Acciones</th>
+                      <th style={{ width: "24%" }}>Nombre · Email</th>
+                      <th style={{ width: "20%" }}>Rol/área · Dept</th>
+                      <th style={{ width: "26%" }}>Habilidades</th>
+                      <th className="text-end" style={{ width: "12%" }}>Sueldo base</th>
+                      <th className="text-center" style={{ width: "10%" }}>Estado</th>
+                      <th className="text-end" style={{ width: "8%" }}>Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -466,26 +464,39 @@ const AdminEmployees = () => {
                           className={highlightMissing && e.incompleto ? "table-warning" : ""}
                         >
                           <td className="py-3">{e.id || "—"}</td>
-                          <td className="py-3 fw-semibold">{e.nombre}</td>
-                          <td className="py-3 text-muted">{e.cargo || e.rol || "—"}</td>
-                          <td className="py-3">{e.email}</td>
-                          <td className="py-3">{e.departamento || "NONE"}</td>
+                          <td className="py-3">
+                            <div className="fw-semibold">{e.nombre}</div>
+                            <div className="text-muted small">{e.email}</div>
+                          </td>
+                          <td className="py-3">
+                            <div className="d-flex flex-column gap-1">
+                              <span className="badge bg-light text-secondary border align-self-start">
+                                {e.cargo || e.rol || "Sin rol"}
+                              </span>
+                              <span className="badge bg-primary-subtle text-primary border align-self-start">
+                                {e.departamento || "Sin depto"}
+                              </span>
+                            </div>
+                          </td>
                           <td className="py-3">
                             <div className="d-flex flex-wrap gap-1">
                               {(e.habilidades || []).map((h, idx) => (
-                                <span key={`${h.tipo}-${h.categoria}-${idx}`} className="badge bg-light text-secondary border">
+                                <span
+                                  key={`${h.tipo}-${h.categoria}-${idx}`}
+                                  className={h.tipo === "PRODUCTO" ? "badge bg-warning-subtle text-warning border" : "badge bg-info-subtle text-info border"}
+                                >
                                   {h.tipo === "PRODUCTO" ? "Prod" : "Serv"} · {h.categoria}
                                 </span>
                               ))}
                               {(e.habilidades || []).length === 0 && <span className="text-muted small">—</span>}
                             </div>
                           </td>
-                          <td className="py-3">
+                          <td className="py-3 text-end">
                             {e.sueldoBase || e.sueldo
                               ? `$ ${Number(e.sueldoBase || e.sueldo || 0).toLocaleString()}`
                               : "—"}
                           </td>
-                          <td className="py-3">
+                          <td className="py-3 text-center">
                             <span
                               className={
                                 (e.estadoLaboral || e.estado || "ACTIVO").toUpperCase() === "ACTIVO"

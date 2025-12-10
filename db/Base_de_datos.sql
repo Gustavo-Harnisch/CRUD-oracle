@@ -416,9 +416,18 @@ CREATE OR REPLACE PROCEDURE JRGY_PRO_PROVEEDOR_LISTAR(
 IS
 BEGIN
     OPEN CUR FOR
-        SELECT COD_PROVEEDOR, NOMBRE_PROVEEDOR, DIRECCION_PROVEEDOR, TELEFONO_PROVEEDOR, COD_REGION
-        FROM JRGY_PROVEEDOR
-        ORDER BY NOMBRE_PROVEEDOR;
+        SELECT p.COD_PROVEEDOR,
+               p.NOMBRE_PROVEEDOR,
+               p.DIRECCION_PROVEEDOR,
+               p.TELEFONO_PROVEEDOR,
+               p.COD_REGION,
+               p.COD_CIUDAD,
+               r.REGION AS REGION_NOMBRE,
+               c.CIUDAD AS CIUDAD_NOMBRE
+        FROM JRGY_PROVEEDOR p
+        LEFT JOIN JRGY_REGION r ON r.COD_REGION = p.COD_REGION
+        LEFT JOIN JRGY_CIUDAD c ON c.COD_CIUDAD = p.COD_CIUDAD
+        ORDER BY p.NOMBRE_PROVEEDOR;
 END;
 /
 
@@ -427,12 +436,13 @@ CREATE OR REPLACE PROCEDURE JRGY_PRO_PROVEEDOR_CREAR(
     P_DIRECCION IN VARCHAR2,
     P_TELEFONO IN NUMBER,
     P_REGION IN NUMBER,
+    P_CIUDAD IN NUMBER,
     P_ID OUT NUMBER
 )
 IS
 BEGIN
-    INSERT INTO JRGY_PROVEEDOR (NOMBRE_PROVEEDOR, DIRECCION_PROVEEDOR, TELEFONO_PROVEEDOR, COD_REGION)
-    VALUES (P_NOMBRE, P_DIRECCION, P_TELEFONO, P_REGION)
+    INSERT INTO JRGY_PROVEEDOR (COD_PROVEEDOR, NOMBRE_PROVEEDOR, DIRECCION_PROVEEDOR, TELEFONO_PROVEEDOR, COD_REGION, COD_CIUDAD)
+    VALUES (SQ_PK_PROVEEDOR.NEXTVAL, P_NOMBRE, P_DIRECCION, P_TELEFONO, P_REGION, P_CIUDAD)
     RETURNING COD_PROVEEDOR INTO P_ID;
     COMMIT;
 END;
@@ -443,7 +453,8 @@ CREATE OR REPLACE PROCEDURE JRGY_PRO_PROVEEDOR_ACTUALIZAR(
     P_NOMBRE IN VARCHAR2,
     P_DIRECCION IN VARCHAR2,
     P_TELEFONO IN NUMBER,
-    P_REGION IN NUMBER
+    P_REGION IN NUMBER,
+    P_CIUDAD IN NUMBER
 )
 IS
 BEGIN
@@ -451,7 +462,8 @@ BEGIN
     SET NOMBRE_PROVEEDOR = P_NOMBRE,
         DIRECCION_PROVEEDOR = P_DIRECCION,
         TELEFONO_PROVEEDOR = P_TELEFONO,
-        COD_REGION = P_REGION
+        COD_REGION = P_REGION,
+        COD_CIUDAD = P_CIUDAD
     WHERE COD_PROVEEDOR = P_ID;
 
     IF SQL%ROWCOUNT = 0 THEN
@@ -477,6 +489,42 @@ BEGIN
         RAISE_APPLICATION_ERROR(-20026, 'PROVEEDOR NO ENCONTRADO');
     END IF;
     COMMIT;
+END;
+/
+
+-- Semilla de regiones y ciudades (Maule, OHiggins, Nuble, Biobio)
+DECLARE
+    PROCEDURE merge_region(p_id NUMBER, p_nombre VARCHAR2) IS
+    BEGIN
+        MERGE INTO JRGY_REGION r USING (SELECT p_id AS id, p_nombre AS nombre FROM dual) d ON (r.COD_REGION = d.id)
+        WHEN NOT MATCHED THEN INSERT (COD_REGION, REGION) VALUES (d.id, d.nombre);
+    END;
+BEGIN
+    merge_region(10, 'MAULE');
+    merge_region(11, 'OHIGGINS');
+    merge_region(12, 'NUBLE');
+    merge_region(13, 'BIOBIO');
+END;
+/
+
+BEGIN
+    FOR rec IN (
+        SELECT 100 AS id, 'TALCA' AS nombre, 10 AS region FROM dual UNION ALL
+        SELECT 101, 'CURICO', 10 FROM dual UNION ALL
+        SELECT 102, 'LINARES', 10 FROM dual UNION ALL
+        SELECT 103, 'CAUQUENES', 10 FROM dual UNION ALL
+        SELECT 110, 'RANCAGUA', 11 FROM dual UNION ALL
+        SELECT 111, 'SAN FERNANDO', 11 FROM dual UNION ALL
+        SELECT 120, 'CHILLAN', 12 FROM dual UNION ALL
+        SELECT 121, 'SAN CARLOS', 12 FROM dual UNION ALL
+        SELECT 130, 'CONCEPCION', 13 FROM dual UNION ALL
+        SELECT 131, 'LOS ANGELES', 13 FROM dual
+    ) LOOP
+        MERGE INTO JRGY_CIUDAD c USING (SELECT rec.id id, rec.nombre nombre, rec.region region FROM dual) d
+        ON (c.COD_CIUDAD = d.id)
+        WHEN NOT MATCHED THEN
+            INSERT (COD_CIUDAD, CIUDAD, COD_REGION) VALUES (d.id, d.nombre, d.region);
+    END LOOP;
 END;
 /
 
@@ -675,9 +723,9 @@ BEGIN
         WITH EMP AS (
             SELECT e.COD_EMPLEADO,
                    e.COD_USUARIO,
-                   u.NOMBRE || ' ' || NVL(u.APELLIDO1, '') || ' ' || NVL(u.APELLIDO2, '') AS NOMBRE_COMPLETO,
-                   u.EMAIL,
-                   e.COD_DEPARTAMENTO,
+                   u.NOMBRE_USUARIO || ' ' || NVL(u.APELLIDO1_USUARIO, '') || ' ' || NVL(u.APELLIDO2_USUARIO, '') AS NOMBRE_COMPLETO,
+                   u.EMAIL_USUARIO,
+                    e.COD_DEPARTAMENTO,
                    NVL(d.NOMBRE, 'NONE') AS DEPARTAMENTO,
                    e.CARGO,
                    e.SUELDO_BASE,
@@ -696,8 +744,8 @@ BEGIN
             SELECT
                 NULL AS COD_EMPLEADO,
                 u.COD_USUARIO,
-                u.NOMBRE || ' ' || NVL(u.APELLIDO1, '') || ' ' || NVL(u.APELLIDO2, '') AS NOMBRE_COMPLETO,
-                u.EMAIL,
+                u.NOMBRE_USUARIO || ' ' || NVL(u.APELLIDO1_USUARIO, '') || ' ' || NVL(u.APELLIDO2_USUARIO, '') AS NOMBRE_COMPLETO,
+                u.EMAIL_USUARIO,
                 NULL AS COD_DEPARTAMENTO,
                 'NONE' AS DEPARTAMENTO,
                 NULL AS CARGO,
@@ -1001,8 +1049,10 @@ CREATE TABLE JRGY_PROVEEDOR (
     DIRECCION_PROVEEDOR VARCHAR2(100),
     TELEFONO_PROVEEDOR NUMBER,
     COD_REGION NUMBER,
+    COD_CIUDAD NUMBER,
     CONSTRAINT PK_JRGY_PROVEEDOR PRIMARY KEY (COD_PROVEEDOR),
-    CONSTRAINT FK_JRGY_PROVEEDOR_REGION FOREIGN KEY (COD_REGION) REFERENCES JRGY_REGION (COD_REGION)
+    CONSTRAINT FK_JRGY_PROVEEDOR_REGION FOREIGN KEY (COD_REGION) REFERENCES JRGY_REGION (COD_REGION),
+    CONSTRAINT FK_JRGY_PROVEEDOR_CIUDAD FOREIGN KEY (COD_CIUDAD) REFERENCES JRGY_CIUDAD (COD_CIUDAD)
 );
 
 CREATE TABLE JRGY_PRODUCTO (
@@ -1210,9 +1260,11 @@ CREATE TABLE JRGY_HABITACION (
     COD_TIPO_HABITACION NUMBER,
     COD_ESTADO_HABITACION NUMBER,
     PRECIO_BASE NUMBER,
+    COD_USUARIO_OCUPANTE NUMBER,
     CONSTRAINT PK_JRGY_HABITACION PRIMARY KEY (COD_HABITACION),
     CONSTRAINT FK_JRGY_HAB_TIPO FOREIGN KEY (COD_TIPO_HABITACION) REFERENCES JRGY_CAT_TIPO_HABITACION (COD_TIPO_HABITACION),
-    CONSTRAINT FK_JRGY_HAB_ESTADO FOREIGN KEY (COD_ESTADO_HABITACION) REFERENCES JRGY_CAT_ESTADO_HABITACION (COD_ESTADO_HABITACION)
+    CONSTRAINT FK_JRGY_HAB_ESTADO FOREIGN KEY (COD_ESTADO_HABITACION) REFERENCES JRGY_CAT_ESTADO_HABITACION (COD_ESTADO_HABITACION),
+    CONSTRAINT FK_JRGY_HAB_USUARIO FOREIGN KEY (COD_USUARIO_OCUPANTE) REFERENCES JRGY_USUARIO (COD_USUARIO)
 );
 
 CREATE TABLE JRGY_RESERVA (
@@ -2383,16 +2435,36 @@ CREATE OR REPLACE PROCEDURE JRGY_PRO_HAB_OBTENER(
 IS
 BEGIN
     OPEN CUR_HAB FOR
+        WITH RES_LATEST AS (
+            SELECT r.*,
+                   ROW_NUMBER() OVER(PARTITION BY r.COD_HABITACION ORDER BY r.FECHA_INICIO DESC, r.COD_RESERVA DESC) rn
+            FROM JRGY_RESERVA r
+        )
         SELECT
             h.COD_HABITACION AS ID,
             h.NRO_HABITACION AS NUMERO,
             h.CAPACIDAD,
             h.PRECIO_BASE,
             th.TIPO_HABITACION AS TIPO,
-            eh.ESTADO_HABITACION AS ESTADO
+            eh.ESTADO_HABITACION AS ESTADO,
+            h.COD_USUARIO_OCUPANTE AS OCUPANTE_ID,
+            u.NOMBRE_USUARIO || ' ' || NVL(u.APELLIDO1_USUARIO, '') AS OCUPANTE_NOMBRE,
+            u.EMAIL_USUARIO AS OCUPANTE_EMAIL,
+            lr.COD_RESERVA AS RES_ID,
+            lr.COD_USUARIO AS RES_USUARIO_ID,
+            lr.FECHA_INICIO AS RES_FECHA_INICIO,
+            lr.FECHA_FIN AS RES_FECHA_FIN,
+            lr.HUESPEDES AS RES_HUESPEDES,
+            er.ESTADO_RESERVA AS RES_ESTADO,
+            u2.NOMBRE_USUARIO || ' ' || NVL(u2.APELLIDO1_USUARIO,'') AS RES_USUARIO_NOMBRE,
+            u2.EMAIL_USUARIO AS RES_USUARIO_EMAIL
         FROM JRGY_HABITACION h
         LEFT JOIN JRGY_CAT_TIPO_HABITACION th ON th.COD_TIPO_HABITACION = h.COD_TIPO_HABITACION
         LEFT JOIN JRGY_CAT_ESTADO_HABITACION eh ON eh.COD_ESTADO_HABITACION = h.COD_ESTADO_HABITACION
+        LEFT JOIN JRGY_USUARIO u ON u.COD_USUARIO = h.COD_USUARIO_OCUPANTE
+        LEFT JOIN RES_LATEST lr ON lr.COD_HABITACION = h.COD_HABITACION AND lr.rn = 1
+        LEFT JOIN JRGY_CAT_ESTADO_RESERVA er ON er.COD_ESTADO_RESERVA = lr.COD_ESTADO_RESERVA
+        LEFT JOIN JRGY_USUARIO u2 ON u2.COD_USUARIO = lr.COD_USUARIO
         WHERE h.COD_HABITACION = P_ID;
 END;
 /
@@ -2403,12 +2475,14 @@ CREATE OR REPLACE PROCEDURE JRGY_PRO_HAB_CREAR(
     P_PRECIO_BASE IN NUMBER,
     P_TIPO_NOMBRE IN VARCHAR2,
     P_ESTADO_NOMBRE IN VARCHAR2,
+    P_USUARIO_ID IN NUMBER,
     P_ID OUT NUMBER
 )
 IS
     V_TIPO_ID NUMBER;
     V_ESTADO_ID NUMBER;
     V_DUP NUMBER;
+    V_USUARIO_ID NUMBER;
 BEGIN
     SELECT COUNT(*) INTO V_DUP FROM JRGY_HABITACION WHERE NRO_HABITACION = P_NUMERO;
     IF V_DUP > 0 THEN
@@ -2423,10 +2497,17 @@ BEGIN
     FROM JRGY_CAT_ESTADO_HABITACION
     WHERE UPPER(ESTADO_HABITACION) = UPPER(P_ESTADO_NOMBRE);
 
+    IF P_USUARIO_ID IS NOT NULL THEN
+        SELECT COUNT(*) INTO V_USUARIO_ID FROM JRGY_USUARIO WHERE COD_USUARIO = P_USUARIO_ID;
+        IF V_USUARIO_ID = 0 THEN
+            RAISE_APPLICATION_ERROR(-20105, 'USUARIO NO ENCONTRADO');
+        END IF;
+    END IF;
+
     INSERT INTO JRGY_HABITACION (
-        NRO_HABITACION, CAPACIDAD, PRECIO_BASE, COD_TIPO_HABITACION, COD_ESTADO_HABITACION
+        NRO_HABITACION, CAPACIDAD, PRECIO_BASE, COD_TIPO_HABITACION, COD_ESTADO_HABITACION, COD_USUARIO_OCUPANTE
     ) VALUES (
-        P_NUMERO, P_CAPACIDAD, P_PRECIO_BASE, V_TIPO_ID, V_ESTADO_ID
+        P_NUMERO, P_CAPACIDAD, P_PRECIO_BASE, V_TIPO_ID, V_ESTADO_ID, P_USUARIO_ID
     )
     RETURNING COD_HABITACION INTO P_ID;
 
@@ -2447,12 +2528,14 @@ CREATE OR REPLACE PROCEDURE JRGY_PRO_HAB_ACTUALIZAR(
     P_CAPACIDAD IN NUMBER,
     P_PRECIO_BASE IN NUMBER,
     P_TIPO_NOMBRE IN VARCHAR2,
-    P_ESTADO_NOMBRE IN VARCHAR2
+    P_ESTADO_NOMBRE IN VARCHAR2,
+    P_USUARIO_ID IN NUMBER
 )
 IS
     V_TIPO_ID NUMBER;
     V_ESTADO_ID NUMBER;
     V_DUP NUMBER;
+    V_USUARIO_ID NUMBER;
 BEGIN
     SELECT COUNT(*) INTO V_DUP FROM JRGY_HABITACION WHERE NRO_HABITACION = P_NUMERO AND COD_HABITACION <> P_ID;
     IF V_DUP > 0 THEN
@@ -2467,12 +2550,20 @@ BEGIN
     FROM JRGY_CAT_ESTADO_HABITACION
     WHERE UPPER(ESTADO_HABITACION) = UPPER(P_ESTADO_NOMBRE);
 
+    IF P_USUARIO_ID IS NOT NULL THEN
+        SELECT COUNT(*) INTO V_USUARIO_ID FROM JRGY_USUARIO WHERE COD_USUARIO = P_USUARIO_ID;
+        IF V_USUARIO_ID = 0 THEN
+            RAISE_APPLICATION_ERROR(-20105, 'USUARIO NO ENCONTRADO');
+        END IF;
+    END IF;
+
     UPDATE JRGY_HABITACION
     SET NRO_HABITACION = P_NUMERO,
         CAPACIDAD = P_CAPACIDAD,
         PRECIO_BASE = P_PRECIO_BASE,
         COD_TIPO_HABITACION = V_TIPO_ID,
-        COD_ESTADO_HABITACION = V_ESTADO_ID
+        COD_ESTADO_HABITACION = V_ESTADO_ID,
+        COD_USUARIO_OCUPANTE = P_USUARIO_ID
     WHERE COD_HABITACION = P_ID;
 
     IF SQL%ROWCOUNT = 0 THEN
@@ -3247,6 +3338,7 @@ IS
     V_NOMBRE_DB VARCHAR2(200);
     V_EMAIL_DB VARCHAR2(200);
     V_RUT_DB NUMBER;
+    V_ESTADO_OCUPADA NUMBER;
 BEGIN
     IF P_RESERVA_ID IS NULL OR P_RUT IS NULL OR P_NOMBRE IS NULL OR P_EMAIL IS NULL THEN
         RAISE_APPLICATION_ERROR(-20022, 'Datos obligatorios faltantes para check-in');
@@ -3294,10 +3386,19 @@ BEGIN
     FROM JRGY_CAT_ESTADO_RESERVA
     WHERE REPLACE(UPPER(ESTADO_RESERVA), '_', ' ') = 'EN PROCESO';
 
+    SELECT COD_ESTADO_HABITACION INTO V_ESTADO_OCUPADA
+    FROM JRGY_CAT_ESTADO_HABITACION
+    WHERE UPPER(ESTADO_HABITACION) = 'OCUPADA';
+
     UPDATE JRGY_RESERVA
     SET COD_ESTADO_RESERVA = V_COD_ESTADO_EN_PROCESO,
         UPDATED_AT = SYSDATE
     WHERE COD_RESERVA = P_RESERVA_ID;
+
+    UPDATE JRGY_HABITACION
+    SET COD_USUARIO_OCUPANTE = V_RESERVA.COD_USUARIO,
+        COD_ESTADO_HABITACION = V_ESTADO_OCUPADA
+    WHERE COD_HABITACION = V_RESERVA.COD_HABITACION;
 
     INSERT INTO JRGY_EVENTO_RESERVA (COD_RESERVA, TIPO_EVENTO, FECHA_EVENTO, NOTAS, CREATED_BY)
     VALUES (P_RESERVA_ID, 'CHECK-IN', SYSDATE, 'Check-in validado con RUT', P_USER_ID);
@@ -3319,6 +3420,8 @@ IS
     V_NOMBRE_DB VARCHAR2(200);
     V_EMAIL_DB VARCHAR2(200);
     V_RUT_DB NUMBER;
+    V_TOTAL_SERV NUMBER := 0;
+    V_ESTADO_LIBRE NUMBER;
 BEGIN
     IF P_RESERVA_ID IS NULL OR P_RUT IS NULL OR P_NOMBRE IS NULL OR P_EMAIL IS NULL THEN
         RAISE_APPLICATION_ERROR(-20022, 'Datos obligatorios faltantes para check-out');
@@ -3365,13 +3468,106 @@ BEGIN
     FROM JRGY_CAT_ESTADO_RESERVA
     WHERE REPLACE(UPPER(ESTADO_RESERVA), '_', ' ') = 'FINALIZADA';
 
+    SELECT COD_ESTADO_HABITACION INTO V_ESTADO_LIBRE
+    FROM JRGY_CAT_ESTADO_HABITACION
+    WHERE UPPER(ESTADO_HABITACION) = 'LIBRE';
+
+    -- Recalcula totales de servicios antes de finalizar
+    SELECT NVL(SUM(TOTAL), 0) INTO V_TOTAL_SERV
+    FROM JRGY_RESERVA_SERVICIO
+    WHERE COD_RESERVA = P_RESERVA_ID
+      AND LOWER(NVL(ESTADO, '')) <> 'cancelado';
+
+    UPDATE JRGY_RESERVA
+    SET TOTAL_SERVICIOS = V_TOTAL_SERV,
+        TOTAL = NVL(TOTAL_HABITACION, 0) + V_TOTAL_SERV
+    WHERE COD_RESERVA = P_RESERVA_ID;
+
     UPDATE JRGY_RESERVA
     SET COD_ESTADO_RESERVA = V_COD_ESTADO_FINALIZADA,
         UPDATED_AT = SYSDATE
     WHERE COD_RESERVA = P_RESERVA_ID;
 
+    UPDATE JRGY_HABITACION
+    SET COD_USUARIO_OCUPANTE = NULL,
+        COD_ESTADO_HABITACION = V_ESTADO_LIBRE
+    WHERE COD_HABITACION = V_RESERVA.COD_HABITACION;
+
     INSERT INTO JRGY_EVENTO_RESERVA (COD_RESERVA, TIPO_EVENTO, FECHA_EVENTO, NOTAS, CREATED_BY)
     VALUES (P_RESERVA_ID, 'CHECK-OUT', SYSDATE, 'Check-out validado con RUT', P_USER_ID);
+
+    COMMIT;
+END;
+/
+
+-- Cancelar reserva (cliente/empleado): solo CREADA, libera habitación si no hay otras en proceso/checkout
+CREATE OR REPLACE PROCEDURE JRGY_PRO_RESERVA_CANCELAR(
+    P_RESERVA_ID IN NUMBER,
+    P_USER_ID IN NUMBER
+)
+IS
+    V_RESERVA              JRGY_RESERVA%ROWTYPE;
+    V_EST_CREADA           NUMBER;
+    V_EST_CANCELADA        NUMBER;
+    V_EST_EN_PROCESO       NUMBER;
+    V_EST_CHECKOUT_SOL     NUMBER;
+    V_HAB_LIBRE            NUMBER;
+    V_ACTIVOS              NUMBER := 0;
+BEGIN
+    IF P_RESERVA_ID IS NULL THEN
+        RAISE_APPLICATION_ERROR(-20022, 'ID RESERVA REQUERIDO');
+    END IF;
+
+    BEGIN
+        SELECT * INTO V_RESERVA FROM JRGY_RESERVA WHERE COD_RESERVA = P_RESERVA_ID FOR UPDATE;
+    EXCEPTION
+        WHEN NO_DATA_FOUND THEN
+            RAISE_APPLICATION_ERROR(-20020, 'Reserva no encontrada');
+    END;
+
+    SELECT COD_ESTADO_RESERVA INTO V_EST_CREADA
+    FROM JRGY_CAT_ESTADO_RESERVA
+    WHERE REPLACE(UPPER(ESTADO_RESERVA), '_', ' ') = 'CREADA';
+
+    SELECT COD_ESTADO_RESERVA INTO V_EST_CANCELADA
+    FROM JRGY_CAT_ESTADO_RESERVA
+    WHERE REPLACE(UPPER(ESTADO_RESERVA), '_', ' ') = 'CANCELADA';
+
+    SELECT COD_ESTADO_RESERVA INTO V_EST_EN_PROCESO
+    FROM JRGY_CAT_ESTADO_RESERVA
+    WHERE REPLACE(UPPER(ESTADO_RESERVA), '_', ' ') = 'EN PROCESO';
+
+    SELECT COD_ESTADO_RESERVA INTO V_EST_CHECKOUT_SOL
+    FROM JRGY_CAT_ESTADO_RESERVA
+    WHERE REPLACE(UPPER(ESTADO_RESERVA), '_', ' ') = 'CHECKOUT SOLICITADO';
+
+    SELECT COD_ESTADO_HABITACION INTO V_HAB_LIBRE
+    FROM JRGY_CAT_ESTADO_HABITACION
+    WHERE REPLACE(UPPER(ESTADO_HABITACION), '_', ' ') = 'LIBRE';
+
+    IF V_RESERVA.COD_ESTADO_RESERVA <> V_EST_CREADA THEN
+        RAISE_APPLICATION_ERROR(-20072, 'Solo puedes cancelar reservas en estado CREADA');
+    END IF;
+
+    UPDATE JRGY_RESERVA
+    SET COD_ESTADO_RESERVA = V_EST_CANCELADA,
+        UPDATED_AT = SYSDATE
+    WHERE COD_RESERVA = P_RESERVA_ID;
+
+    INSERT INTO JRGY_EVENTO_RESERVA (COD_RESERVA, TIPO_EVENTO, FECHA_EVENTO, NOTAS, CREATED_BY)
+    VALUES (P_RESERVA_ID, 'CANCELADA', SYSDATE, 'Reserva cancelada', P_USER_ID);
+
+    SELECT COUNT(*) INTO V_ACTIVOS
+    FROM JRGY_RESERVA r
+    WHERE r.COD_HABITACION = V_RESERVA.COD_HABITACION
+      AND r.COD_RESERVA <> P_RESERVA_ID
+      AND r.COD_ESTADO_RESERVA IN (V_EST_EN_PROCESO, V_EST_CHECKOUT_SOL);
+
+    IF V_ACTIVOS = 0 THEN
+        UPDATE JRGY_HABITACION
+        SET COD_ESTADO_HABITACION = V_HAB_LIBRE
+        WHERE COD_HABITACION = V_RESERVA.COD_HABITACION;
+    END IF;
 
     COMMIT;
 END;
@@ -3498,16 +3694,36 @@ CREATE OR REPLACE PROCEDURE JRGY_PRO_HABITACION_LISTAR(
 IS
 BEGIN
     OPEN CUR_HAB FOR
+        WITH RES_LATEST AS (
+            SELECT r.*,
+                   ROW_NUMBER() OVER(PARTITION BY r.COD_HABITACION ORDER BY r.FECHA_INICIO DESC, r.COD_RESERVA DESC) rn
+            FROM JRGY_RESERVA r
+        )
         SELECT
             h.COD_HABITACION AS ID,
             h.NRO_HABITACION AS NUMERO,
             h.CAPACIDAD,
             h.PRECIO_BASE,
             th.TIPO_HABITACION AS TIPO,
-            eh.ESTADO_HABITACION AS ESTADO
+            eh.ESTADO_HABITACION AS ESTADO,
+            h.COD_USUARIO_OCUPANTE AS OCUPANTE_ID,
+            u.NOMBRE_USUARIO || ' ' || NVL(u.APELLIDO1_USUARIO, '') AS OCUPANTE_NOMBRE,
+            u.EMAIL_USUARIO AS OCUPANTE_EMAIL,
+            lr.COD_RESERVA AS RES_ID,
+            lr.COD_USUARIO AS RES_USUARIO_ID,
+            lr.FECHA_INICIO AS RES_FECHA_INICIO,
+            lr.FECHA_FIN AS RES_FECHA_FIN,
+            lr.HUESPEDES AS RES_HUESPEDES,
+            er.ESTADO_RESERVA AS RES_ESTADO,
+            u2.NOMBRE_USUARIO || ' ' || NVL(u2.APELLIDO1_USUARIO,'') AS RES_USUARIO_NOMBRE,
+            u2.EMAIL_USUARIO AS RES_USUARIO_EMAIL
         FROM JRGY_HABITACION h
         LEFT JOIN JRGY_CAT_TIPO_HABITACION th ON th.COD_TIPO_HABITACION = h.COD_TIPO_HABITACION
         LEFT JOIN JRGY_CAT_ESTADO_HABITACION eh ON eh.COD_ESTADO_HABITACION = h.COD_ESTADO_HABITACION
+        LEFT JOIN JRGY_USUARIO u ON u.COD_USUARIO = h.COD_USUARIO_OCUPANTE
+        LEFT JOIN RES_LATEST lr ON lr.COD_HABITACION = h.COD_HABITACION AND lr.rn = 1
+        LEFT JOIN JRGY_CAT_ESTADO_RESERVA er ON er.COD_ESTADO_RESERVA = lr.COD_ESTADO_RESERVA
+        LEFT JOIN JRGY_USUARIO u2 ON u2.COD_USUARIO = lr.COD_USUARIO
         ORDER BY h.NRO_HABITACION;
 END;
 /
@@ -4624,60 +4840,85 @@ END;
 
 -- Sincroniza estado de habitacion según el estado de la reserva
 CREATE OR REPLACE TRIGGER TRG_RESERVA_SYNC_ESTADO_HAB
-    AFTER INSERT OR UPDATE OF COD_ESTADO_RESERVA ON JRGY_RESERVA
-    FOR EACH ROW
-DECLARE
-    v_est_en_proceso   NUMBER;
-    v_est_finalizada   NUMBER;
-    v_est_cancelada    NUMBER;
-    v_est_checkout_sol NUMBER;
-    v_hab_ocupada      NUMBER;
-    v_hab_libre        NUMBER;
-    v_activos          NUMBER := 0;
-BEGIN
-    SELECT COD_ESTADO_RESERVA INTO v_est_en_proceso
-    FROM JRGY_CAT_ESTADO_RESERVA
-    WHERE REPLACE(UPPER(ESTADO_RESERVA), '_', ' ') = 'EN PROCESO';
+    FOR INSERT OR UPDATE OF COD_ESTADO_RESERVA ON JRGY_RESERVA
+COMPOUND TRIGGER
+    TYPE t_row IS RECORD (
+        cod_reserva    NUMBER,
+        cod_habitacion NUMBER,
+        cod_estado     NUMBER
+    );
+    TYPE t_tab IS TABLE OF t_row INDEX BY PLS_INTEGER;
+    g_rows t_tab;
 
-    SELECT COD_ESTADO_RESERVA INTO v_est_finalizada
-    FROM JRGY_CAT_ESTADO_RESERVA
-    WHERE REPLACE(UPPER(ESTADO_RESERVA), '_', ' ') = 'FINALIZADA';
+    AFTER EACH ROW IS
+    BEGIN
+        g_rows(g_rows.COUNT + 1) := t_row(:NEW.COD_RESERVA, :NEW.COD_HABITACION, :NEW.COD_ESTADO_RESERVA);
+    END AFTER EACH ROW;
 
-    SELECT COD_ESTADO_RESERVA INTO v_est_cancelada
-    FROM JRGY_CAT_ESTADO_RESERVA
-    WHERE REPLACE(UPPER(ESTADO_RESERVA), '_', ' ') = 'CANCELADA';
+    AFTER STATEMENT IS
+        v_est_en_proceso   NUMBER;
+        v_est_finalizada   NUMBER;
+        v_est_cancelada    NUMBER;
+        v_est_checkout_sol NUMBER;
+        v_hab_ocupada      NUMBER;
+        v_hab_libre        NUMBER;
+    BEGIN
+        IF g_rows.COUNT > 0 THEN
+            SELECT COD_ESTADO_RESERVA INTO v_est_en_proceso
+            FROM JRGY_CAT_ESTADO_RESERVA
+            WHERE REPLACE(UPPER(ESTADO_RESERVA), '_', ' ') = 'EN PROCESO';
 
-    SELECT COD_ESTADO_RESERVA INTO v_est_checkout_sol
-    FROM JRGY_CAT_ESTADO_RESERVA
-    WHERE REPLACE(UPPER(ESTADO_RESERVA), '_', ' ') = 'CHECKOUT SOLICITADO';
+            SELECT COD_ESTADO_RESERVA INTO v_est_finalizada
+            FROM JRGY_CAT_ESTADO_RESERVA
+            WHERE REPLACE(UPPER(ESTADO_RESERVA), '_', ' ') = 'FINALIZADA';
 
-    SELECT COD_ESTADO_HABITACION INTO v_hab_ocupada
-    FROM JRGY_CAT_ESTADO_HABITACION
-    WHERE REPLACE(UPPER(ESTADO_HABITACION), '_', ' ') = 'OCUPADA';
+            SELECT COD_ESTADO_RESERVA INTO v_est_cancelada
+            FROM JRGY_CAT_ESTADO_RESERVA
+            WHERE REPLACE(UPPER(ESTADO_RESERVA), '_', ' ') = 'CANCELADA';
 
-    SELECT COD_ESTADO_HABITACION INTO v_hab_libre
-    FROM JRGY_CAT_ESTADO_HABITACION
-    WHERE REPLACE(UPPER(ESTADO_HABITACION), '_', ' ') = 'LIBRE';
+            SELECT COD_ESTADO_RESERVA INTO v_est_checkout_sol
+            FROM JRGY_CAT_ESTADO_RESERVA
+            WHERE REPLACE(UPPER(ESTADO_RESERVA), '_', ' ') = 'CHECKOUT SOLICITADO';
 
-    -- Al pasar a EN PROCESO, marca la habitación como OCUPADA
-    IF :NEW.COD_ESTADO_RESERVA = v_est_en_proceso THEN
-        UPDATE JRGY_HABITACION
-        SET COD_ESTADO_HABITACION = v_hab_ocupada
-        WHERE COD_HABITACION = :NEW.COD_HABITACION;
-    ELSIF :NEW.COD_ESTADO_RESERVA IN (v_est_finalizada, v_est_cancelada) THEN
-        -- Al finalizar/cancelar, libera solo si no hay otra reserva activa en la misma habitación
-        SELECT COUNT(*) INTO v_activos
-        FROM JRGY_RESERVA r
-        WHERE r.COD_HABITACION = :NEW.COD_HABITACION
-          AND r.COD_RESERVA <> :NEW.COD_RESERVA
-          AND r.COD_ESTADO_RESERVA IN (v_est_en_proceso, v_est_checkout_sol);
+            SELECT COD_ESTADO_HABITACION INTO v_hab_ocupada
+            FROM JRGY_CAT_ESTADO_HABITACION
+            WHERE REPLACE(UPPER(ESTADO_HABITACION), '_', ' ') = 'OCUPADA';
 
-        IF v_activos = 0 THEN
-            UPDATE JRGY_HABITACION
-            SET COD_ESTADO_HABITACION = v_hab_libre
-            WHERE COD_HABITACION = :NEW.COD_HABITACION;
+            SELECT COD_ESTADO_HABITACION INTO v_hab_libre
+            FROM JRGY_CAT_ESTADO_HABITACION
+            WHERE REPLACE(UPPER(ESTADO_HABITACION), '_', ' ') = 'LIBRE';
+
+            FOR i IN g_rows.FIRST .. g_rows.LAST LOOP
+                IF g_rows.EXISTS(i) THEN
+                    IF g_rows(i).cod_estado = v_est_en_proceso THEN
+                        UPDATE JRGY_HABITACION
+                        SET COD_ESTADO_HABITACION = v_hab_ocupada,
+                            COD_USUARIO_OCUPANTE = (
+                                SELECT COD_USUARIO FROM JRGY_RESERVA WHERE COD_RESERVA = g_rows(i).cod_reserva
+                            )
+                        WHERE COD_HABITACION = g_rows(i).cod_habitacion;
+                    ELSIF g_rows(i).cod_estado IN (v_est_finalizada, v_est_cancelada) THEN
+                        DECLARE
+                            v_activos NUMBER := 0;
+                        BEGIN
+                            SELECT COUNT(*) INTO v_activos
+                            FROM JRGY_RESERVA r
+                            WHERE r.COD_HABITACION = g_rows(i).cod_habitacion
+                              AND r.COD_RESERVA <> g_rows(i).cod_reserva
+                              AND r.COD_ESTADO_RESERVA IN (v_est_en_proceso, v_est_checkout_sol);
+
+                            IF v_activos = 0 THEN
+                                UPDATE JRGY_HABITACION
+                                SET COD_ESTADO_HABITACION = v_hab_libre,
+                                    COD_USUARIO_OCUPANTE = NULL
+                                WHERE COD_HABITACION = g_rows(i).cod_habitacion;
+                            END IF;
+                        END;
+                    END IF;
+                END IF;
+            END LOOP;
         END IF;
-    END IF;
+    END AFTER STATEMENT;
 END;
 /
 
@@ -4705,6 +4946,192 @@ DECLARE
 BEGIN
     sync_seq('SQ_PK_EMPLEADO', 'JRGY_EMPLEADO', 'COD_EMPLEADO');
     sync_seq('SQ_PK_CLIENTE', 'JRGY_CLIENTE', 'COD_CLIENTE');
+END;
+/
+
+PROMPT Datos demo adicionales (departamentos, empleados, servicios y productos)...
+DECLARE
+    v_hash_demo CONSTANT VARCHAR2(60) := '$2a$10$294QjQAUurCbQj8NbaTZ7eyPagN2TNIlT2H2CQZY3sLTe/pcss/oO'; -- Demo1234
+    v_estado_activo NUMBER;
+    v_estado_lab_activo NUMBER;
+    v_role_emp NUMBER;
+    v_dummy NUMBER;
+    v_dep_recep NUMBER;
+    v_dep_mant NUMBER;
+    v_dep_limp NUMBER;
+    v_dep_serv NUMBER;
+    v_dep_seg NUMBER;
+    v_dep_cocina NUMBER;
+    v_user_id NUMBER;
+
+    FUNCTION ensure_user(
+        p_cod_usuario NUMBER,
+        p_nombre VARCHAR2,
+        p_apellido1 VARCHAR2,
+        p_apellido2 VARCHAR2,
+        p_email VARCHAR2
+    ) RETURN NUMBER IS
+        v_id NUMBER;
+    BEGIN
+        BEGIN
+            SELECT COD_USUARIO INTO v_id FROM JRGY_USUARIO WHERE LOWER(EMAIL_USUARIO) = LOWER(p_email);
+        EXCEPTION
+            WHEN NO_DATA_FOUND THEN
+                INSERT INTO JRGY_USUARIO(
+                    COD_USUARIO, NOMBRE_USUARIO, APELLIDO1_USUARIO, APELLIDO2_USUARIO,
+                    EMAIL_USUARIO, TELEFONO_USUARIO, CONTRASENA_HASH, COD_ESTADO_USUARIO
+                ) VALUES (
+                    p_cod_usuario, p_nombre, p_apellido1, p_apellido2,
+                    p_email, 999999999, v_hash_demo, v_estado_activo
+                )
+                RETURNING COD_USUARIO INTO v_id;
+        END;
+        RETURN v_id;
+    END;
+
+    PROCEDURE ensure_user_role(p_user NUMBER, p_role NUMBER) IS
+    BEGIN
+        BEGIN
+            SELECT 1 INTO v_dummy FROM JRGY_USUARIO_ROL WHERE COD_USUARIO = p_user AND COD_ROL = p_role;
+        EXCEPTION
+            WHEN NO_DATA_FOUND THEN
+                INSERT INTO JRGY_USUARIO_ROL (COD_USUARIO, COD_ROL) VALUES (p_user, p_role);
+        END;
+    END;
+
+    FUNCTION ensure_departamento(p_nombre VARCHAR2, p_presupuesto NUMBER) RETURN NUMBER IS
+        v_id NUMBER;
+    BEGIN
+        BEGIN
+            SELECT COD_DEPARTAMENTO INTO v_id FROM JRGY_DEPARTAMENTO WHERE UPPER(NOMBRE) = UPPER(p_nombre);
+        EXCEPTION
+            WHEN NO_DATA_FOUND THEN
+                INSERT INTO JRGY_DEPARTAMENTO (NOMBRE, PRESUPUESTO) VALUES (p_nombre, p_presupuesto)
+                RETURNING COD_DEPARTAMENTO INTO v_id;
+        END;
+        RETURN v_id;
+    END;
+
+    PROCEDURE ensure_empleado(p_user_id NUMBER, p_dep_id NUMBER, p_cargo VARCHAR2, p_sueldo NUMBER) IS
+        v_exists NUMBER;
+    BEGIN
+        BEGIN
+            SELECT COD_EMPLEADO INTO v_exists FROM JRGY_EMPLEADO WHERE COD_USUARIO = p_user_id;
+        EXCEPTION
+            WHEN NO_DATA_FOUND THEN
+                INSERT INTO JRGY_EMPLEADO (
+                    COD_USUARIO, COD_DEPARTAMENTO, CARGO, SUELDO_BASE, FECHA_CONTRATACION, COD_ESTADO_LABORAL
+                ) VALUES (
+                    p_user_id, p_dep_id, p_cargo, p_sueldo, TRUNC(SYSDATE), v_estado_lab_activo
+                );
+        END;
+    END;
+
+    FUNCTION ensure_tipo_servicio(p_nombre VARCHAR2) RETURN NUMBER IS
+        v_id NUMBER;
+    BEGIN
+        BEGIN
+            SELECT COD_TIPO_SERVICIO INTO v_id FROM JRGY_CAT_TIPO_SERVICIO WHERE UPPER(NOMBRE) = UPPER(p_nombre);
+        EXCEPTION
+            WHEN NO_DATA_FOUND THEN
+                BEGIN
+                    INSERT INTO JRGY_CAT_TIPO_SERVICIO (NOMBRE, DESCRIPCION)
+                    VALUES (p_nombre, 'Demo tipo') RETURNING COD_TIPO_SERVICIO INTO v_id;
+                EXCEPTION
+                    WHEN DUP_VAL_ON_INDEX THEN
+                        SELECT COD_TIPO_SERVICIO INTO v_id FROM JRGY_CAT_TIPO_SERVICIO WHERE UPPER(NOMBRE) = UPPER(p_nombre);
+                END;
+        END;
+        RETURN v_id;
+    END;
+
+    PROCEDURE ensure_servicio(p_nombre VARCHAR2, p_desc VARCHAR2, p_precio NUMBER, p_tipo VARCHAR2) IS
+        v_id NUMBER;
+        v_tipo_id NUMBER;
+    BEGIN
+        v_tipo_id := ensure_tipo_servicio(p_tipo);
+        BEGIN
+            SELECT COD_SERVICIO INTO v_id FROM JRGY_SERVICIO WHERE UPPER(NOMBRE) = UPPER(p_nombre);
+        EXCEPTION
+            WHEN NO_DATA_FOUND THEN
+                INSERT INTO JRGY_SERVICIO (NOMBRE, DESCRIPCION, PRECIO, COD_TIPO_SERVICIO, ESTADO, ES_DESTACADO, ORDEN)
+                VALUES (p_nombre, p_desc, p_precio, v_tipo_id, 'activo', 'N', 1);
+        END;
+    END;
+
+    PROCEDURE ensure_producto(p_nombre VARCHAR2, p_tipo VARCHAR2, p_precio NUMBER, p_stock NUMBER) IS
+        v_tipo_id NUMBER;
+    BEGIN
+        v_tipo_id := ensure_tipo_servicio(p_tipo);
+        BEGIN
+            SELECT 1 INTO v_dummy FROM JRGY_PRODUCTO WHERE UPPER(NOMBRE_PRODUCTO) = UPPER(p_nombre);
+        EXCEPTION
+            WHEN NO_DATA_FOUND THEN
+                INSERT INTO JRGY_PRODUCTO (NOMBRE_PRODUCTO, COD_TIPO_SERVICIO, PRECIO_PRODUCTO, CANTIDAD_PRODUCTO, STOCK_PRODUCTO)
+                VALUES (p_nombre, v_tipo_id, p_precio, p_stock, p_stock);
+        END;
+    END;
+
+BEGIN
+    SELECT COD_ESTADO_USUARIO INTO v_estado_activo FROM JRGY_CAT_ESTADO_USUARIO WHERE UPPER(ESTADO_USUARIO) = 'ACTIVO';
+    SELECT COD_ESTADO_LABORAL INTO v_estado_lab_activo FROM JRGY_CAT_ESTADO_LABORAL WHERE UPPER(ESTADO_LABORAL) = 'ACTIVO';
+    SELECT COD_ROL INTO v_role_emp FROM JRGY_ROL WHERE UPPER(NOMBRE_ROL) = 'EMPLOYEE';
+
+    v_dep_recep   := ensure_departamento('Recepcion', 15000000);
+    v_dep_mant    := ensure_departamento('Mantenimiento', 18000000);
+    v_dep_limp    := ensure_departamento('Limpieza', 12000000);
+    v_dep_serv    := ensure_departamento('Servicios', 14000000);
+    v_dep_seg     := ensure_departamento('Seguridad', 13000000);
+    v_dep_cocina  := ensure_departamento('Cocina', 16000000);
+
+    -- Empleados demo (sin acentos)
+    v_user_id := ensure_user(40000001, 'Alex', 'Rivera', 'Demo', 'alex.rivera.demo@example.com');
+    ensure_user_role(v_user_id, v_role_emp);
+    ensure_empleado(v_user_id, v_dep_recep, 'Recepcionista', 750000);
+
+    v_user_id := ensure_user(40000002, 'Bruno', 'Lopez', 'Demo', 'bruno.lopez.demo@example.com');
+    ensure_user_role(v_user_id, v_role_emp);
+    ensure_empleado(v_user_id, v_dep_mant, 'Tecnico', 820000);
+
+    v_user_id := ensure_user(40000003, 'Carla', 'Diaz', 'Demo', 'carla.diaz.demo@example.com');
+    ensure_user_role(v_user_id, v_role_emp);
+    ensure_empleado(v_user_id, v_dep_limp, 'Operador', 700000);
+
+    v_user_id := ensure_user(40000004, 'Diego', 'Torres', 'Demo', 'diego.torres.demo@example.com');
+    ensure_user_role(v_user_id, v_role_emp);
+    ensure_empleado(v_user_id, v_dep_mant, 'Tecnico', 820000);
+
+    v_user_id := ensure_user(40000005, 'Elena', 'Paz', 'Demo', 'elena.paz.demo@example.com');
+    ensure_user_role(v_user_id, v_role_emp);
+    ensure_empleado(v_user_id, v_dep_recep, 'Recepcionista', 750000);
+
+    v_user_id := ensure_user(40000006, 'Felipe', 'Lara', 'Demo', 'felipe.lara.demo@example.com');
+    ensure_user_role(v_user_id, v_role_emp);
+    ensure_empleado(v_user_id, v_dep_serv, 'Mozo', 680000);
+
+    v_user_id := ensure_user(40000007, 'Gabriela', 'Moya', 'Demo', 'gabriela.moya.demo@example.com');
+    ensure_user_role(v_user_id, v_role_emp);
+    ensure_empleado(v_user_id, v_dep_serv, 'Camarera', 680000);
+
+    v_user_id := ensure_user(40000008, 'Hugo', 'Salas', 'Demo', 'hugo.salas.demo@example.com');
+    ensure_user_role(v_user_id, v_role_emp);
+    ensure_empleado(v_user_id, v_dep_seg, 'Guardia', 800000);
+
+    v_user_id := ensure_user(40000009, 'Isabel', 'Campos', 'Demo', 'isabel.campos.demo@example.com');
+    ensure_user_role(v_user_id, v_role_emp);
+    ensure_empleado(v_user_id, v_dep_limp, 'Operador', 700000);
+
+    v_user_id := ensure_user(40000010, 'Jorge', 'Fuentes', 'Demo', 'jorge.fuentes.demo@example.com');
+    ensure_user_role(v_user_id, v_role_emp);
+    ensure_empleado(v_user_id, v_dep_cocina, 'Cocinero', 850000);
+
+    ensure_servicio('Spa Relax', 'Acceso spa y sauna', 25000, 'SPA');
+    ensure_servicio('Room Clean', 'Limpieza completa', 12000, 'ROOMCLEAN');
+    ensure_servicio('Exterior Tour', 'Tour guiado exterior', 30000, 'EXTERIOR');
+
+    ensure_producto('Toalla Blanca', 'SPA', 5000, 50);
+    ensure_producto('Set Amenity', 'ROOMCLEAN', 4000, 80);
+    ensure_producto('Linterna', 'EXTERIOR', 6000, 30);
 END;
 /
 
@@ -4931,5 +5358,164 @@ BEGIN
     ensure_room(501, 3, v_tipo_suite, 85000);
     ensure_room(502, 3, v_tipo_suite, 85000);
     ensure_room(503, 3, v_tipo_suite, 85000);
+END;
+/
+
+-- ============================================================================
+-- Patch integrado: regiones/ciudades y CRUD de proveedores con ciudad
+-- Ejecuta un solo archivo Base_de_datos.sql. No usa acentos.
+-- ============================================================================
+DECLARE
+    v_dummy NUMBER;
+BEGIN
+    -- Columna COD_CIUDAD en proveedor
+    SELECT COUNT(*) INTO v_dummy FROM user_tab_cols WHERE table_name = 'JRGY_PROVEEDOR' AND column_name = 'COD_CIUDAD';
+    IF v_dummy = 0 THEN
+        EXECUTE IMMEDIATE 'ALTER TABLE JRGY_PROVEEDOR ADD COD_CIUDAD NUMBER';
+    END IF;
+
+    -- FK a ciudad
+    SELECT COUNT(*) INTO v_dummy FROM user_constraints WHERE constraint_name = 'FK_JRGY_PROVEEDOR_CIUDAD';
+    IF v_dummy = 0 THEN
+        EXECUTE IMMEDIATE 'ALTER TABLE JRGY_PROVEEDOR ADD CONSTRAINT FK_JRGY_PROVEEDOR_CIUDAD FOREIGN KEY (COD_CIUDAD) REFERENCES JRGY_CIUDAD (COD_CIUDAD)';
+    END IF;
+END;
+/
+
+-- Secuencia y trigger PK proveedor
+BEGIN
+    DECLARE v_cnt NUMBER; BEGIN
+        SELECT COUNT(*) INTO v_cnt FROM user_sequences WHERE sequence_name = 'SQ_PK_PROVEEDOR';
+        IF v_cnt = 0 THEN
+            EXECUTE IMMEDIATE 'CREATE SEQUENCE SQ_PK_PROVEEDOR START WITH 100 INCREMENT BY 1 NOMAXVALUE NOCYCLE';
+        END IF;
+    END;
+    EXECUTE IMMEDIATE '
+        CREATE OR REPLACE TRIGGER TRG_PK_PROVEEDOR
+        BEFORE INSERT ON JRGY_PROVEEDOR
+        FOR EACH ROW
+        BEGIN
+            IF :NEW.COD_PROVEEDOR IS NULL THEN
+                :NEW.COD_PROVEEDOR := SQ_PK_PROVEEDOR.NEXTVAL;
+            END IF;
+        END;';
+END;
+/
+
+-- Procedimientos de proveedor (incluye region/ciudad)
+CREATE OR REPLACE PROCEDURE JRGY_PRO_PROVEEDOR_LISTAR(
+    CUR OUT SYS_REFCURSOR
+)
+IS
+BEGIN
+    OPEN CUR FOR
+        SELECT p.COD_PROVEEDOR,
+               p.NOMBRE_PROVEEDOR,
+               p.DIRECCION_PROVEEDOR,
+               p.TELEFONO_PROVEEDOR,
+               p.COD_REGION,
+               p.COD_CIUDAD,
+               r.REGION AS REGION_NOMBRE,
+               c.CIUDAD AS CIUDAD_NOMBRE
+        FROM JRGY_PROVEEDOR p
+        LEFT JOIN JRGY_REGION r ON r.COD_REGION = p.COD_REGION
+        LEFT JOIN JRGY_CIUDAD c ON c.COD_CIUDAD = p.COD_CIUDAD
+        ORDER BY p.NOMBRE_PROVEEDOR;
+END;
+/
+
+CREATE OR REPLACE PROCEDURE JRGY_PRO_PROVEEDOR_CREAR(
+    P_NOMBRE IN VARCHAR2,
+    P_DIRECCION IN VARCHAR2,
+    P_TELEFONO IN NUMBER,
+    P_REGION IN NUMBER,
+    P_CIUDAD IN NUMBER,
+    P_ID OUT NUMBER
+)
+IS
+BEGIN
+    INSERT INTO JRGY_PROVEEDOR (COD_PROVEEDOR, NOMBRE_PROVEEDOR, DIRECCION_PROVEEDOR, TELEFONO_PROVEEDOR, COD_REGION, COD_CIUDAD)
+    VALUES (SQ_PK_PROVEEDOR.NEXTVAL, P_NOMBRE, P_DIRECCION, P_TELEFONO, P_REGION, P_CIUDAD)
+    RETURNING COD_PROVEEDOR INTO P_ID;
+    COMMIT;
+END;
+/
+
+CREATE OR REPLACE PROCEDURE JRGY_PRO_PROVEEDOR_ACTUALIZAR(
+    P_ID IN NUMBER,
+    P_NOMBRE IN VARCHAR2,
+    P_DIRECCION IN VARCHAR2,
+    P_TELEFONO IN NUMBER,
+    P_REGION IN NUMBER,
+    P_CIUDAD IN NUMBER
+)
+IS
+BEGIN
+    UPDATE JRGY_PROVEEDOR
+    SET NOMBRE_PROVEEDOR = P_NOMBRE,
+        DIRECCION_PROVEEDOR = P_DIRECCION,
+        TELEFONO_PROVEEDOR = P_TELEFONO,
+        COD_REGION = P_REGION,
+        COD_CIUDAD = P_CIUDAD
+    WHERE COD_PROVEEDOR = P_ID;
+
+    IF SQL%ROWCOUNT = 0 THEN
+        RAISE_APPLICATION_ERROR(-20026, 'PROVEEDOR NO ENCONTRADO');
+    END IF;
+    COMMIT;
+END;
+/
+
+CREATE OR REPLACE PROCEDURE JRGY_PRO_PROVEEDOR_BORRAR(
+    P_ID IN NUMBER
+)
+IS
+    V_COUNT NUMBER;
+BEGIN
+    SELECT COUNT(*) INTO V_COUNT FROM JRGY_DETALLE_PEDIDO WHERE COD_PROVEEDOR = P_ID;
+    IF V_COUNT > 0 THEN
+        RAISE_APPLICATION_ERROR(-20104, 'NO SE PUEDE ELIMINAR: TIENE PEDIDOS');
+    END IF;
+
+    DELETE FROM JRGY_PROVEEDOR WHERE COD_PROVEEDOR = P_ID;
+    IF SQL%ROWCOUNT = 0 THEN
+        RAISE_APPLICATION_ERROR(-20026, 'PROVEEDOR NO ENCONTRADO');
+    END IF;
+    COMMIT;
+END;
+/
+
+-- Semilla regiones/ciudades (IDs fijos, sin acentos)
+BEGIN
+    MERGE INTO JRGY_REGION r USING (SELECT 10 AS id, 'MAULE' AS nombre FROM dual) d ON (r.COD_REGION=d.id)
+    WHEN NOT MATCHED THEN INSERT (COD_REGION, REGION) VALUES (d.id, d.nombre);
+    MERGE INTO JRGY_REGION r USING (SELECT 11 AS id, 'OHIGGINS' AS nombre FROM dual) d ON (r.COD_REGION=d.id)
+    WHEN NOT MATCHED THEN INSERT (COD_REGION, REGION) VALUES (d.id, d.nombre);
+    MERGE INTO JRGY_REGION r USING (SELECT 12 AS id, 'NUBLE' AS nombre FROM dual) d ON (r.COD_REGION=d.id)
+    WHEN NOT MATCHED THEN INSERT (COD_REGION, REGION) VALUES (d.id, d.nombre);
+    MERGE INTO JRGY_REGION r USING (SELECT 13 AS id, 'BIOBIO' AS nombre FROM dual) d ON (r.COD_REGION=d.id)
+    WHEN NOT MATCHED THEN INSERT (COD_REGION, REGION) VALUES (d.id, d.nombre);
+END;
+/
+
+BEGIN
+    FOR rec IN (
+        SELECT 100 AS id, 'TALCA' AS nombre, 10 AS region FROM dual UNION ALL
+        SELECT 101, 'CURICO', 10 FROM dual UNION ALL
+        SELECT 102, 'LINARES', 10 FROM dual UNION ALL
+        SELECT 103, 'CAUQUENES', 10 FROM dual UNION ALL
+        SELECT 110, 'RANCAGUA', 11 FROM dual UNION ALL
+        SELECT 111, 'SAN FERNANDO', 11 FROM dual UNION ALL
+        SELECT 120, 'CHILLAN', 12 FROM dual UNION ALL
+        SELECT 121, 'SAN CARLOS', 12 FROM dual UNION ALL
+        SELECT 130, 'CONCEPCION', 13 FROM dual UNION ALL
+        SELECT 131, 'LOS ANGELES', 13 FROM dual
+    ) LOOP
+        MERGE INTO JRGY_CIUDAD c USING (SELECT rec.id id, rec.nombre nombre, rec.region region FROM dual) d
+        ON (c.COD_CIUDAD = d.id)
+        WHEN NOT MATCHED THEN
+            INSERT (COD_CIUDAD, CIUDAD, COD_REGION) VALUES (d.id, d.nombre, d.region);
+    END LOOP;
+    COMMIT;
 END;
 /

@@ -10,6 +10,7 @@ const PasswordField = memo(
     required = false,
     placeholder = "",
     buttonVariant = "outline-secondary",
+    isInvalid = false,
   }) => {
     const [show, setShow] = useState(false);
 
@@ -23,7 +24,7 @@ const PasswordField = memo(
             id={id}
             name={name}
             type={show ? "text" : "password"}
-            className="form-control"
+            className={`form-control${isInvalid ? " is-invalid" : ""}`}
             value={value}
             onChange={onChange}
             required={required}

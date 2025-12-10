@@ -1,14 +1,8 @@
 // src/pages/employee/EmployeeDashboard.jsx
 import { Link } from "react-router-dom";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
-
-const statCards = [
-  { id: "checkins", label: "Check-ins hoy", value: 12, helper: "+2 vs ayer" },
-  { id: "checkouts", label: "Salidas programadas", value: 7, helper: "3 late check-out" },
-  { id: "requests", label: "Peticiones abiertas", value: 9, helper: "2 urgentes" },
-  { id: "oos", label: "Rooms fuera de servicio", value: 3, helper: "Revisión y limpieza" },
-];
+import { fetchEmployeeDashboardStats } from "../../services/employeeService";
 
 const employeeSections = [
   {
@@ -48,11 +42,49 @@ const employeeSections = [
 
 const EmployeeDashboard = () => {
   const { user } = useAuth();
+  const [stats, setStats] = useState({
+    checkinsToday: 0,
+    checkoutsToday: 0,
+    openRequests: 0,
+    roomsOOS: 0,
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   const firstName = useMemo(() => {
     if (!user?.name) return "equipo";
     const [name] = user.name.split(" ");
     return name || "equipo";
   }, [user?.name]);
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      setError("");
+      try {
+        const data = await fetchEmployeeDashboardStats();
+        setStats({
+          checkinsToday: Number(data.checkinsToday) || 0,
+          checkoutsToday: Number(data.checkoutsToday) || 0,
+          openRequests: Number(data.openRequests) || 0,
+          roomsOOS: Number(data.roomsOOS) || 0,
+        });
+      } catch (err) {
+        console.error(err);
+        const msg = err?.response?.data?.message || "No se pudieron cargar los datos en vivo.";
+        setError(msg);
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, []);
+
+  const statCards = [
+    { id: "checkins", label: "Check-ins hoy", value: stats.checkinsToday, helper: "Llegadas planificadas" },
+    { id: "checkouts", label: "Salidas programadas", value: stats.checkoutsToday, helper: "Check-out para hoy" },
+    { id: "requests", label: "Peticiones abiertas", value: stats.openRequests, helper: "Tickets sin cerrar" },
+    { id: "oos", label: "Rooms fuera de servicio", value: stats.roomsOOS, helper: "Revisión y limpieza" },
+  ];
 
   return (
     <div className="container py-4">
@@ -72,14 +104,18 @@ const EmployeeDashboard = () => {
         </div>
       </div>
 
+      {error && <div className="alert alert-danger">{error}</div>}
+
       <div className="row g-3 mb-4">
         {statCards.map((card) => (
           <div className="col-6 col-md-3" key={card.id}>
             <div className="card shadow-sm h-100">
               <div className="card-body">
                 <p className="text-uppercase text-muted small mb-1">{card.label}</p>
-                <h3 className="h4 mb-1">{card.value}</h3>
-                <p className="text-success small mb-0">{card.helper}</p>
+                <h3 className="h4 mb-1">
+                  {loading ? <span className="placeholder col-4" /> : card.value}
+                </h3>
+                <p className="text-muted small mb-0">{card.helper}</p>
               </div>
             </div>
           </div>

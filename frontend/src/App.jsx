@@ -37,6 +37,7 @@ import CustomerHome from "./pages/customer/CustomerHome";
 import EmployeeHome from "./pages/employee/EmployeeHome";
 import AdminHome from "./pages/admin/AdminHome";
 import AdminRooms from "./pages/admin/AdminRooms";
+import AdminReservations from "./pages/admin/AdminReservations";
 import AdminServices from "./pages/admin/AdminServices";
 import AdminPackages from "./pages/admin/AdminPackages";
 import AdminDepartments from "./pages/admin/AdminDepartments";
@@ -136,6 +137,7 @@ function App() {
           <Route path="/admin/users/:id/edit" element={<EditUser />} />
           <Route path="/admin/employees" element={<AdminEmployees />} />
           <Route path="/admin/rooms" element={<AdminRooms />} />
+          <Route path="/admin/reservations" element={<AdminReservations />} />
           <Route path="/admin/services" element={<AdminServices />} />
           <Route path="/admin/departments" element={<AdminDepartments />} />
           <Route path="/admin/reports" element={<AdminReports />} />
