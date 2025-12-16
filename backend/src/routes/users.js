@@ -126,6 +126,9 @@ router.post(
         if (err.errorNum === 20092) {
           throw new AppError('Rol solicitado no existe en catálogo.', 422);
         }
+        if (err.errorNum === 20011) {
+          throw new AppError('El RUT ya está registrado', 409);
+        }
         if (err.errorNum === 20093) {
           throw new AppError('El correo ya está registrado', 409);
         }

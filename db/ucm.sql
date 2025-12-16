@@ -1,24 +1,4 @@
--- Script seguro para recrear todas las tablas, secuencias y objetos.
--- Ordenado para evitar ORA-00942 y ORA-00955.
-
--- NOTA (RUT como PK): si deseas migrar usuarios para que usen RUT (8 dígitos sin DV) como clave primaria
--- y login, integra aquí el bloque de migración antes de crear objetos. Ajusta los WHERE a tus usuarios seed
--- (admin=11111111, empleado=22222222, cliente=33333333) que hoy están en:
---   admin:    gustavo.admin@example.com    / Gustavo_make_ALL2004.
---   empleado: gustavo.empleado@example.com / gustavo_empleado
---   cliente:  gustavo.cliente@example.com  / gustavo_cliente
--- Bloque sugerido (destructivo, ejecutar en entorno de prueba y con backup):
---   ALTER TABLE JRGY_USUARIO ADD (RUT NUMBER(8));
---   UPDATE JRGY_USUARIO SET RUT = 11111111 WHERE EMAIL_USUARIO = 'gustavo.admin@example.com';
---   UPDATE JRGY_USUARIO SET RUT = 22222222 WHERE EMAIL_USUARIO = 'gustavo.empleado@example.com';
---   UPDATE JRGY_USUARIO SET RUT = 33333333 WHERE EMAIL_USUARIO = 'gustavo.cliente@example.com';
---   ALTER TABLE JRGY_USUARIO MODIFY (RUT NOT NULL);
---   ALTER TABLE JRGY_USUARIO ADD CONSTRAINT UQ_JRGY_USUARIO_RUT UNIQUE (RUT);
---   -- Dropear PK/seq/trigger de COD_USUARIO y FKs (TOKENS, USUARIO_ROL, CLIENTE, EMPLEADO, SOLICITUD_ADMIN, RESERVA, etc.).
---   -- Crear columnas RUT en tablas dependientes, copiar datos desde COD_USUARIO, eliminar COD_USUARIO y recrear FKs/PKs sobre RUT.
---   -- Ajustar procs de auth/usuarios/reservas/empleados/roles para usar RUT en vez de COD_USUARIO.
---   -- Actualizar login para aceptar RUT en lugar de correo.
-  --------------------------------------------------------
+--------------------------------------------------------
 -- Archivo creado  - miércoles-diciembre-10-2025   
 --------------------------------------------------------
 --------------------------------------------------------
@@ -2520,6 +2500,7 @@ COMPOUND TRIGGER
     TYPE t_row IS RECORD (
         cod_reserva    NUMBER,
         cod_habitacion NUMBER,
+        cod_usuario    NUMBER,
         cod_estado     NUMBER
     );
     TYPE t_tab IS TABLE OF t_row INDEX BY PLS_INTEGER;
@@ -2527,7 +2508,7 @@ COMPOUND TRIGGER
 
     AFTER EACH ROW IS
     BEGIN
-        g_rows(g_rows.COUNT + 1) := t_row(:NEW.COD_RESERVA, :NEW.COD_HABITACION, :NEW.COD_ESTADO_RESERVA);
+        g_rows(g_rows.COUNT + 1) := t_row(:NEW.COD_RESERVA, :NEW.COD_HABITACION, :NEW.COD_USUARIO, :NEW.COD_ESTADO_RESERVA);
     END AFTER EACH ROW;
 
     AFTER STATEMENT IS
@@ -2568,20 +2549,17 @@ COMPOUND TRIGGER
                     IF g_rows(i).cod_estado = v_est_en_proceso THEN
                         UPDATE JRGY_HABITACION
                         SET COD_ESTADO_HABITACION = v_hab_ocupada,
-                            COD_USUARIO_OCUPANTE = (
-                                SELECT COD_USUARIO FROM JRGY_RESERVA WHERE COD_RESERVA = g_rows(i).cod_reserva
-                            )
+                            COD_USUARIO_OCUPANTE = g_rows(i).cod_usuario
                         WHERE COD_HABITACION = g_rows(i).cod_habitacion;
                     ELSIF g_rows(i).cod_estado IN (v_est_finalizada, v_est_cancelada) THEN
                         DECLARE
-                            v_activos NUMBER := 0;
+                            v_activos NUMBER := FN_RESERVAS_ACTIVAS_HAB(
+                                g_rows(i).cod_habitacion,
+                                g_rows(i).cod_reserva,
+                                v_est_en_proceso,
+                                v_est_checkout_sol
+                            );
                         BEGIN
-                            SELECT COUNT(*) INTO v_activos
-                            FROM JRGY_RESERVA r
-                            WHERE r.COD_HABITACION = g_rows(i).cod_habitacion
-                              AND r.COD_RESERVA <> g_rows(i).cod_reserva
-                              AND r.COD_ESTADO_RESERVA IN (v_est_en_proceso, v_est_checkout_sol);
-
                             IF v_activos = 0 THEN
                                 UPDATE JRGY_HABITACION
                                 SET COD_ESTADO_HABITACION = v_hab_libre,
@@ -2911,6 +2889,7 @@ COMPOUND TRIGGER
     TYPE t_row IS RECORD (
         cod_reserva    NUMBER,
         cod_habitacion NUMBER,
+        cod_usuario    NUMBER,
         cod_estado     NUMBER
     );
     TYPE t_tab IS TABLE OF t_row INDEX BY PLS_INTEGER;
@@ -2918,7 +2897,7 @@ COMPOUND TRIGGER
 
     AFTER EACH ROW IS
     BEGIN
-        g_rows(g_rows.COUNT + 1) := t_row(:NEW.COD_RESERVA, :NEW.COD_HABITACION, :NEW.COD_ESTADO_RESERVA);
+        g_rows(g_rows.COUNT + 1) := t_row(:NEW.COD_RESERVA, :NEW.COD_HABITACION, :NEW.COD_USUARIO, :NEW.COD_ESTADO_RESERVA);
     END AFTER EACH ROW;
 
     AFTER STATEMENT IS
@@ -2959,20 +2938,17 @@ COMPOUND TRIGGER
                     IF g_rows(i).cod_estado = v_est_en_proceso THEN
                         UPDATE JRGY_HABITACION
                         SET COD_ESTADO_HABITACION = v_hab_ocupada,
-                            COD_USUARIO_OCUPANTE = (
-                                SELECT COD_USUARIO FROM JRGY_RESERVA WHERE COD_RESERVA = g_rows(i).cod_reserva
-                            )
+                            COD_USUARIO_OCUPANTE = g_rows(i).cod_usuario
                         WHERE COD_HABITACION = g_rows(i).cod_habitacion;
                     ELSIF g_rows(i).cod_estado IN (v_est_finalizada, v_est_cancelada) THEN
                         DECLARE
-                            v_activos NUMBER := 0;
+                            v_activos NUMBER := FN_RESERVAS_ACTIVAS_HAB(
+                                g_rows(i).cod_habitacion,
+                                g_rows(i).cod_reserva,
+                                v_est_en_proceso,
+                                v_est_checkout_sol
+                            );
                         BEGIN
-                            SELECT COUNT(*) INTO v_activos
-                            FROM JRGY_RESERVA r
-                            WHERE r.COD_HABITACION = g_rows(i).cod_habitacion
-                              AND r.COD_RESERVA <> g_rows(i).cod_reserva
-                              AND r.COD_ESTADO_RESERVA IN (v_est_en_proceso, v_est_checkout_sol);
-
                             IF v_activos = 0 THEN
                                 UPDATE JRGY_HABITACION
                                 SET COD_ESTADO_HABITACION = v_hab_libre,
@@ -9778,6 +9754,38 @@ END;
 BEGIN
     SELECT NVL(STOCK_PRODUCTO, 0) INTO STK FROM JRGY_PRODUCTO WHERE COD_PRODUCTO = COD_PRODUCTO_P;
     RETURN STK;
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        RETURN 0;
+END;
+
+/
+--------------------------------------------------------
+--  DDL for Function FN_RESERVAS_ACTIVAS_HAB
+--------------------------------------------------------
+
+  CREATE OR REPLACE EDITIONABLE FUNCTION "UCM"."FN_RESERVAS_ACTIVAS_HAB" (
+    P_HABITACION_ID IN NUMBER,
+    P_EXCEPT_RESERVA_ID IN NUMBER,
+    P_ESTADO_ACTIVO_1 IN NUMBER,
+    P_ESTADO_ACTIVO_2 IN NUMBER
+  ) RETURN NUMBER
+IS
+    PRAGMA AUTONOMOUS_TRANSACTION;
+    V_COUNT NUMBER := 0;
+BEGIN
+    IF P_HABITACION_ID IS NULL THEN
+        RETURN 0;
+    END IF;
+
+    SELECT COUNT(*)
+    INTO V_COUNT
+    FROM JRGY_RESERVA
+    WHERE COD_HABITACION = P_HABITACION_ID
+      AND (P_EXCEPT_RESERVA_ID IS NULL OR COD_RESERVA <> P_EXCEPT_RESERVA_ID)
+      AND COD_ESTADO_RESERVA IN (P_ESTADO_ACTIVO_1, P_ESTADO_ACTIVO_2);
+
+    RETURN NVL(V_COUNT, 0);
 EXCEPTION
     WHEN NO_DATA_FOUND THEN
         RETURN 0;

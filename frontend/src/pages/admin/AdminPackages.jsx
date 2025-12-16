@@ -5,6 +5,7 @@ import {
   updateService,
   deleteService,
   changeServiceStatus,
+  fetchAllowedServiceTypes,
 } from "../../services/serviceService";
 import {
   listProducts,
@@ -43,7 +44,7 @@ const AdminPackages = () => {
     [user],
   );
   const isAdmin = roles.includes("ADMIN");
-  const allowedTypes = isAdmin ? null : ["HOUSEKEEPING", "ROOM SERVICE", "MANTENCION", "SPA"];
+  const [allowedTypes, setAllowedTypes] = useState(isAdmin ? null : []);
   const [packages, setPackages] = useState([]);
   const [allServices, setAllServices] = useState([]);
   const [products, setProducts] = useState([]);
@@ -71,22 +72,29 @@ const AdminPackages = () => {
     setLoading(true);
     setError("");
     try {
-      const [svcData, prodData] = await Promise.all([
+      const [typesApi, svcData, prodData] = await Promise.all([
+        fetchAllowedServiceTypes().catch(() => (isAdmin ? null : [])),
         listServices({ includeInactive: 1 }),
         listProducts(),
       ]);
+      const allowedFromApi = isAdmin ? null : Array.isArray(typesApi) ? typesApi : [];
+      setAllowedTypes(isAdmin ? null : allowedFromApi);
       const filteredProds =
-        allowedTypes === null
+        (allowedFromApi === null || isAdmin)
           ? prodData || []
-          : (prodData || []).filter((p) => allowedTypes.includes((p.tipo || "").trim().toUpperCase()));
+          : (prodData || []).filter((p) =>
+              allowedFromApi.includes((p.tipo || "").trim().toUpperCase()),
+            );
       const map = new Map((filteredProds || []).map((p) => [p.id, p]));
       setProducts(filteredProds || []);
       setProductMap(map);
 
       const filteredServices =
-        allowedTypes === null
+        (allowedFromApi === null || isAdmin)
           ? svcData || []
-          : (svcData || []).filter((s) => allowedTypes.includes((s.tipo || "").trim().toUpperCase()));
+          : (svcData || []).filter((s) =>
+              allowedFromApi.includes((s.tipo || "").trim().toUpperCase()),
+            );
       setAllServices(filteredServices);
 
       const pkgServices = (svcData || []).filter((s) => {
@@ -134,7 +142,7 @@ const AdminPackages = () => {
   }, [packages, filters]);
 
   const resetForm = () => {
-    setForm({ ...emptyForm, tipo: allowedTypes?.[0] || "" });
+    setForm({ ...emptyForm, tipo: allowedTypes === null ? "" : allowedTypes?.[0] || "" });
     setEditingId(null);
   };
 

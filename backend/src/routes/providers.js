@@ -15,7 +15,11 @@ function mapProvider(row) {
     nombre: row.NOMBRE_PROVEEDOR,
     direccion: row.DIRECCION_PROVEEDOR,
     telefono: row.TELEFONO_PROVEEDOR,
-    regionId: row.COD_REGION
+    contacto: row.CORREO || row.CONTACTO || null,
+    regionId: row.COD_REGION,
+    cityId: row.COD_CIUDAD,
+    regionNombre: row.REGION,
+    cityNombre: row.CIUDAD
   };
 }
 
@@ -43,17 +47,18 @@ router.post(
     const user = await withConnection((conn) => requireUserFromToken(conn, token, false));
     if (!hasRole(user, ['ADMIN'])) throw new AppError('No autorizado', 403);
 
-    const { nombre = '', direccion = '', telefono = null, regionId = null } = req.body || {};
+    const { nombre = '', direccion = '', telefono = null, regionId = null, cityId = null } = req.body || {};
     if (!nombre.trim()) throw new AppError('Nombre requerido', 400);
 
     const provider = await withConnection(async (conn) => {
       const result = await conn.execute(
-        `BEGIN JRGY_PRO_PROVEEDOR_CREAR(:nombre, :direccion, :telefono, :region, :id); END;`,
+        `BEGIN JRGY_PRO_PROVEEDOR_CREAR(:nombre, :direccion, :telefono, :region, :ciudad, :id); END;`,
         {
           nombre: nombre.trim(),
           direccion: direccion || null,
           telefono: telefono ? Number(telefono) : null,
           region: regionId ? Number(regionId) : null,
+          ciudad: cityId ? Number(cityId) : null,
           id: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER }
         },
         { autoCommit: true }
@@ -82,19 +87,20 @@ router.put(
 
     const id = Number(req.params.id);
     if (!id) throw new AppError('ID inválido', 400);
-    const { nombre = '', direccion = '', telefono = null, regionId = null } = req.body || {};
+    const { nombre = '', direccion = '', telefono = null, regionId = null, cityId = null } = req.body || {};
     if (!nombre.trim()) throw new AppError('Nombre requerido', 400);
 
     await withConnection(async (conn) => {
       try {
         await conn.execute(
-          `BEGIN JRGY_PRO_PROVEEDOR_ACTUALIZAR(:id, :nombre, :direccion, :telefono, :region); END;`,
+          `BEGIN JRGY_PRO_PROVEEDOR_ACTUALIZAR(:id, :nombre, :direccion, :telefono, :region, :ciudad); END;`,
           {
             id,
             nombre: nombre.trim(),
             direccion: direccion || null,
             telefono: telefono ? Number(telefono) : null,
-            region: regionId ? Number(regionId) : null
+            region: regionId ? Number(regionId) : null,
+            ciudad: cityId ? Number(cityId) : null
           },
           { autoCommit: true }
         );

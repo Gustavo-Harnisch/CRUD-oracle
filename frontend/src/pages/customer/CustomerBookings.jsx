@@ -112,8 +112,9 @@ const CustomerBookings = () => {
             else if (hasCheckout) derivedStatus = "FINALIZADA";
             else if (hasCheckoutRequest || base.includes("CHECKOUT")) derivedStatus = "CHECKOUT_SOLICITADO";
             else if (hasCheckin) derivedStatus = "EN PROCESO";
-            else if (startDate && startDate < todayStart) derivedStatus = "ATRASADO";
-            else if (startDate && startDate <= todayEnd) derivedStatus = "EN PROCESO";
+            else if (startDate && startDate <= todayEnd) {
+              derivedStatus = hasCheckin ? "EN PROCESO" : "ATRASADO";
+            }
             else derivedStatus = "CREADA";
 
             return {

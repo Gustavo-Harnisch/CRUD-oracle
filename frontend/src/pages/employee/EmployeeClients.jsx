@@ -189,19 +189,16 @@ const EmployeeClients = () => {
 
   const arrivals = useMemo(
     () =>
-      normalizedReservations.filter(
-        (r) =>
-          r.startDate &&
-          ((r.startDate >= todayRange.start && r.startDate <= todayRange.end) || r.arrivalStatus === "missed"),
-      ),
-    [normalizedReservations, todayRange],
+      normalizedReservations.filter((r) => (r.derivedStatus || "").toUpperCase() === "ATRASADO"),
+    [normalizedReservations],
   );
 
   const departures = useMemo(
     () =>
-      normalizedReservations.filter(
-        (r) => r.endDate && r.endDate >= todayRange.start && r.endDate <= todayRange.end,
-      ),
+      normalizedReservations.filter((r) => {
+        if (!r.endDate || r.endDate < todayRange.start || r.endDate > todayRange.end) return false;
+        return (r.derivedStatus || "").toUpperCase() === "EN PROCESO";
+      }),
     [normalizedReservations, todayRange],
   );
 
@@ -220,17 +217,22 @@ const EmployeeClients = () => {
       { id: "all", label: "Reservas cargadas", value: normalizedReservations.length, helper: "Todas las de clientes" },
       {
         id: "arrivals",
-        label: "Llegadas hoy",
-        value: arrivals.filter((a) => a.arrivalStatus === "pending").length,
-        helper: "Check-in programados",
+        label: "Check-in atrasados",
+        value: arrivals.length,
+        helper: "Pendientes de recibir",
       },
-      { id: "departures", label: "Salidas hoy", value: departures.length, helper: "Coordinar limpieza" },
+      {
+        id: "departures",
+        label: "Salidas en proceso",
+        value: departures.length,
+        helper: "Listas para checkout",
+      },
       { id: "inaction", label: "Reservas en acción", value: inAction.length, helper: "Check-in ya realizado" },
       {
         id: "missed",
-        label: "Check-in atrasados",
-        value: arrivals.filter((a) => a.arrivalStatus === "missed").length,
-        helper: "Revisar pendientes de días previos",
+        label: "Sin check-in",
+        value: arrivals.length,
+        helper: "Revisar pendientes",
       },
     ],
     [normalizedReservations.length, arrivals, departures.length, inAction.length],
@@ -357,7 +359,7 @@ const EmployeeClients = () => {
             </span>
           </div>
           {!loading && arrivals.length === 0 && !error && (
-            <p className="text-muted small mb-0">Sin llegadas programadas para hoy.</p>
+            <p className="text-muted small mb-0">Sin check-in atrasados.</p>
           )}
           {loading ? (
             <p className="text-muted mb-0">Cargando reservas...</p>
@@ -378,24 +380,27 @@ const EmployeeClients = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {arrivals.map((arrival) => (
-                      <tr key={arrival.id}>
-                        <td className="fw-semibold">#{arrival.id}</td>
-                        <td>{arrival.clienteId || "N/D"}</td>
-                        <td>{arrival.roomNumber}</td>
-                        <td>{formatDate(arrival.start)}</td>
+                    {arrivals.map((arrival) => {
+                      const isDelayed = (arrival.derivedStatus || "").toUpperCase() === "ATRASADO";
+                      const badgeState = isDelayed ? "missed" : arrival.arrivalStatus;
+                      return (
+                        <tr key={arrival.id}>
+                          <td className="fw-semibold">#{arrival.id}</td>
+                          <td>{arrival.clienteId || "N/D"}</td>
+                          <td>{arrival.roomNumber}</td>
+                          <td>{formatDate(arrival.start)}</td>
                         <td>
                           <span className={statusBadge(arrival.derivedStatus || arrival.status)}>
                             {arrival.derivedStatus || arrival.status}
                           </span>
                         </td>
                         <td>
-                          <span className={arrivalStatusBadge(arrival.arrivalStatus)}>
-                            {arrival.arrivalStatus === "pending"
-                              ? "Pendiente hoy"
-                              : arrival.arrivalStatus === "missed"
-                                ? "No llegó"
-                                : arrival.arrivalStatus === "done"
+                          <span className={arrivalStatusBadge(badgeState)}>
+                            {isDelayed
+                              ? "No llegó"
+                              : badgeState === "pending"
+                                ? "Pendiente hoy"
+                                : badgeState === "done"
                                   ? "Check-in registrado"
                                   : "Próximo"}
                           </span>
@@ -412,7 +417,8 @@ const EmployeeClients = () => {
                         </button>
                       </td>
                     </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -432,7 +438,7 @@ const EmployeeClients = () => {
           {loading ? (
             <p className="text-muted mb-0">Cargando reservas...</p>
           ) : departures.length === 0 ? (
-            <p className="text-muted small mb-0">Sin salidas programadas para hoy.</p>
+            <p className="text-muted small mb-0">Sin salidas en proceso para hoy.</p>
           ) : (
             <div className="table-responsive">
               <table className="table table-striped align-middle mb-0">
@@ -452,8 +458,10 @@ const EmployeeClients = () => {
                       <td className="fw-semibold">#{dep.id}</td>
                       <td>{dep.roomNumber}</td>
                       <td>{formatDate(dep.end)}</td>
-                      <td>
-                        <span className={statusBadge(dep.status)}>{dep.status}</span>
+                        <td>
+                          <span className={statusBadge(dep.derivedStatus || dep.status)}>
+                            {dep.derivedStatus || dep.status}
+                          </span>
                       </td>
                       <td>$ {Number(dep.totalHabitacion || dep.total || 0).toLocaleString()}</td>
                       <td className="text-end">

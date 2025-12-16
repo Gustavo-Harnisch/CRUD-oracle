@@ -23,7 +23,8 @@ function mapService(row, horarioRows = []) {
     nombre: row.NOMBRE,
     descripcion: row.DESCRIPCION,
     precio: row.PRECIO,
-    tipo: row.TIPO,
+    // Preferimos el nombre del tipo; si no viene, retornamos el id para que el frontend lo pueda mostrar.
+    tipo: row.TIPO_SERVICIO || row.TIPO || row.COD_TIPO_SERVICIO,
     estado: row.ESTADO,
     destacado: row.ES_DESTACADO === 'Y',
     orden: row.ORDEN,
@@ -31,6 +32,76 @@ function mapService(row, horarioRows = []) {
     updatedAt: row.UPDATED_AT,
     horarios
   };
+}
+
+const SQL_ALLOWED_TYPES = `
+  SELECT DISTINCT NVL(TRIM(UPPER(h.CATEGORIA)), NVL(TRIM(UPPER(h.TIPO)), NULL)) AS TIPO
+  FROM JRGY_EMPLEADO_HABILIDAD h
+  JOIN JRGY_EMPLEADO e ON e.COD_EMPLEADO = h.COD_EMPLEADO
+  WHERE e.COD_USUARIO = :uid
+`;
+
+async function fetchAllowedTypes(conn, user) {
+  if (!user) return null;
+  if (hasRole(user, ['ADMIN'])) return null; // admin ve todo
+  if (!hasRole(user, ['EMPLOYEE'])) return null; // clientes no tienen restricción
+  const res = await conn.execute(SQL_ALLOWED_TYPES, { uid: user.id });
+  const rows = res.rows || [];
+  const tipos = rows
+    .map((r) => (r.TIPO !== undefined ? r.TIPO : r[0]))
+    .filter(Boolean)
+    .map((t) => String(t).trim().toUpperCase());
+  const unique = Array.from(new Set(tipos));
+  return unique.length ? unique : null;
+}
+
+const isPackageType = (tipo = '') => {
+  const t = String(tipo || '').trim().toUpperCase();
+  return t.includes('PAQUET') || t.includes('PACK') || t.includes('COMBO');
+};
+
+async function syncPaqueteRow(conn, serviceId, isPaquete) {
+  if (!serviceId) return;
+  if (isPaquete) {
+    await conn.execute(
+      `
+        INSERT INTO JRGY_PAQUETE (COD_PAQUETE)
+        SELECT :id FROM dual
+        WHERE NOT EXISTS (SELECT 1 FROM JRGY_PAQUETE WHERE COD_PAQUETE = :id)
+      `,
+      { id: serviceId },
+      { autoCommit: true }
+    );
+  } else {
+    await conn.execute(`DELETE FROM JRGY_PAQUETE WHERE COD_PAQUETE = :id`, { id: serviceId }, { autoCommit: true });
+  }
+}
+
+// Normaliza el tipo recibido (id o nombre) a un id válido de JRGY_CAT_TIPO_SERVICIO.
+async function resolveTipoId(conn, raw) {
+  if (raw === undefined || raw === null || raw === '') return null;
+  const maybeNumber = Number(raw);
+  if (!Number.isNaN(maybeNumber)) return maybeNumber;
+
+  const name = String(raw || '').trim().toUpperCase();
+  if (!name) return null;
+  const res = await conn.execute(
+    `SELECT COD_TIPO_SERVICIO FROM JRGY_CAT_TIPO_SERVICIO WHERE UPPER(NOMBRE)=:n`,
+    { n: name }
+  );
+  const found = (res.rows || [])[0]?.COD_TIPO_SERVICIO;
+  if (!found) throw new AppError('Categoría de servicio no existe', 422);
+  return found;
+}
+
+async function resolveTipoInfo(conn, raw) {
+  const id = await resolveTipoId(conn, raw);
+  if (!id) return { id: null, nombre: raw || null };
+  const res = await conn.execute(`SELECT UPPER(NOMBRE) AS NOMBRE FROM JRGY_CAT_TIPO_SERVICIO WHERE COD_TIPO_SERVICIO=:id`, {
+    id
+  });
+  const nombre = (res.rows || [])[0]?.NOMBRE || null;
+  return { id, nombre };
 }
 
 function parseHorarios(horarios = []) {
@@ -177,6 +248,7 @@ router.get(
     const showInactive = user && hasRole(user, ['ADMIN']) && includeInactive;
 
     const services = await withConnection(async (conn) => {
+      const allowedTypes = await fetchAllowedTypes(conn, user);
       const result = await conn.execute(
         `BEGIN JRGY_PRO_SERVICIO_LISTAR(:includeInactive, :cursor); END;`,
         {
@@ -201,10 +273,23 @@ router.get(
       const horarioRows = (await cursorHor.getRows()) || [];
       await cursorHor.close();
 
-      return validRows.map((r) => mapService(r, horarioRows)).filter(Boolean);
+      const all = validRows.map((r) => mapService(r, horarioRows)).filter(Boolean);
+      if (!allowedTypes) return all;
+      return all.filter((s) => allowedTypes.includes(String(s.tipo || '').trim().toUpperCase()));
     });
 
     res.json(services);
+  })
+);
+
+// Tipos permitidos para el usuario autenticado
+router.get(
+  '/services/allowed-types',
+  asyncHandler(async (req, res) => {
+    const token = extractToken(req);
+    const user = await withConnection((conn) => requireUserFromToken(conn, token, false));
+    const allowed = await withConnection((conn) => fetchAllowedTypes(conn, user));
+    res.json(allowed); // null => sin restricción (admin)
   })
 );
 
@@ -231,6 +316,7 @@ router.post(
 
     await withConnection(async (conn) => {
       const horariosJson = JSON.stringify(horarios);
+      const tipoInfo = await resolveTipoInfo(conn, tipo);
       let result;
       try {
         result = await conn.execute(
@@ -239,7 +325,7 @@ router.post(
             nombre,
             descripcion,
             precio,
-            tipo,
+            tipo: tipoInfo.id,
             estado,
             destacado,
             orden,
@@ -254,6 +340,7 @@ router.post(
       }
 
       const newId = firstOutValue(result.outBinds.id);
+      await syncPaqueteRow(conn, newId, isPackageType(tipoInfo.nombre || tipo));
       const resGet = await conn.execute(
         `BEGIN JRGY_PRO_SERVICIO_OBTENER(:id, :curServ, :curHor); END;`,
         {
@@ -300,10 +387,11 @@ router.put(
 
     await withConnection(async (conn) => {
       const horariosJson = JSON.stringify(horarios);
+      const tipoInfo = await resolveTipoInfo(conn, tipo);
       try {
         await conn.execute(
           `BEGIN JRGY_PRO_SERVICIO_ACTUALIZAR(:id, :nombre, :descripcion, :precio, :tipo, :estado, :destacado, :orden, :horariosJson); END;`,
-          { id, nombre, descripcion, precio, tipo, estado, destacado, orden, horariosJson },
+          { id, nombre, descripcion, precio, tipo: tipoInfo.id, estado, destacado, orden, horariosJson },
           { autoCommit: true }
         );
       } catch (err) {
@@ -327,6 +415,7 @@ router.put(
       await curServ.close();
       await curHor.close();
 
+      await syncPaqueteRow(conn, id, isPackageType(tipoInfo.nombre || tipo));
       res.json(mapService(servRows[0], horRows));
     });
   })

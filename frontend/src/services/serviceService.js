@@ -25,6 +25,8 @@ export const replacePackageServices = (serviceId, items) =>
   api.put(`/services/${serviceId}/included-services`, items).then((res) => res.data);
 
 export const fetchServiceCategories = () => api.get("/services/categories").then((res) => res.data);
+export const fetchAllowedServiceTypes = () =>
+  api.get("/services/allowed-types").then((res) => res.data);
 
 export default {
   listServices,
@@ -36,4 +38,5 @@ export default {
   fetchPackageServices,
   replacePackageServices,
   fetchServiceCategories,
+  fetchAllowedServiceTypes,
 };

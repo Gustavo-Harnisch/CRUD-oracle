@@ -1,8 +1,16 @@
 PROMPT Semilla demo completa (usuarios/empleados, departamentos, regiones/ciudades, servicios, productos)
--- Datos sin acentos. Password para usuarios demo: Demo1234
+-- Datos sin acentos.
+-- Passwords:
+--   * gustavo.admin@example.com    -> Gustavo_make_ALL2004.
+--   * gustavo.empleado@example.com -> gustavo_empleado
+--   * gustavo.cliente@example.com  -> gustavo_cliente
+--   * Resto de cuentas demo        -> Demo1234
 
 DECLARE
-    c_hash CONSTANT VARCHAR2(60) := '$2a$10$294QjQAUurCbQj8NbaTZ7eyPagN2TNIlT2H2CQZY3sLTe/pcss/oO';
+    c_hash_demo CONSTANT VARCHAR2(60) := '$2a$10$R4gAes1yY3W08LJi84SX2eHI1y19clorv1PelbHyML4lQxCalWZU6';
+    c_hash_admin CONSTANT VARCHAR2(60) := '$2a$10$4PKlqEd.yqxq/sqPK3eyp.8oYpKpstmL3dK1R9X4pNkukuDMMAdu.';
+    c_hash_empleado CONSTANT VARCHAR2(60) := '$2a$10$2Pz5XLwrm1waZtBePFgkcuI5AdkfDFaX8tLI33GRbbo8cCdtHv1BG';
+    c_hash_cliente CONSTANT VARCHAR2(60) := '$2a$10$wZZfA4QNAE5CDfNlEByJ0eX8geyStz3R6NQzd.7UCrU08JMKjsyxu';
 
     v_estado_activo        NUMBER;
     v_estado_lab_activo    NUMBER;
@@ -46,14 +54,24 @@ DECLARE
         END;
     END;
 
-    FUNCTION ensure_user(p_id NUMBER, p_nom VARCHAR2, p_ap1 VARCHAR2, p_ap2 VARCHAR2, p_mail VARCHAR2) RETURN NUMBER IS
+    PROCEDURE ensure_cliente(p_user NUMBER) IS
+    BEGIN
+        BEGIN
+            SELECT 1 INTO v_dummy FROM JRGY_CLIENTE WHERE COD_USUARIO = p_user;
+        EXCEPTION WHEN NO_DATA_FOUND THEN
+            INSERT INTO JRGY_CLIENTE (COD_USUARIO, FECHA_ALTA)
+            VALUES (p_user, TRUNC(SYSDATE));
+        END;
+    END;
+
+    FUNCTION ensure_user(p_id NUMBER, p_nom VARCHAR2, p_ap1 VARCHAR2, p_ap2 VARCHAR2, p_mail VARCHAR2, p_hash VARCHAR2 DEFAULT c_hash_demo) RETURN NUMBER IS
         v_id NUMBER;
     BEGIN
         BEGIN
             SELECT COD_USUARIO INTO v_id FROM JRGY_USUARIO WHERE LOWER(EMAIL_USUARIO)=LOWER(p_mail);
         EXCEPTION WHEN NO_DATA_FOUND THEN
             INSERT INTO JRGY_USUARIO (COD_USUARIO, NOMBRE_USUARIO, APELLIDO1_USUARIO, APELLIDO2_USUARIO, EMAIL_USUARIO, TELEFONO_USUARIO, CONTRASENA_HASH, COD_ESTADO_USUARIO)
-            VALUES (p_id, p_nom, p_ap1, p_ap2, p_mail, 999999999, c_hash, v_estado_activo)
+            VALUES (p_id, p_nom, p_ap1, p_ap2, p_mail, 999999999, p_hash, v_estado_activo)
             RETURNING COD_USUARIO INTO v_id;
         END;
         RETURN v_id;
@@ -135,13 +153,14 @@ BEGIN
     DECLARE
         v_id NUMBER;
     BEGIN
-        v_id := ensure_user(11111111, 'Gustavo', 'Admin', 'Demo', 'gustavo.admin@example.com');
+        v_id := ensure_user(11111111, 'Gustavo', 'Admin', 'Demo', 'gustavo.admin@example.com', c_hash_admin);
         ensure_user_role(v_id, v_role_admin);
-        v_id := ensure_user(22222222, 'Gustavo', 'Empleado', 'Demo', 'gustavo.empleado@example.com');
+        v_id := ensure_user(22222222, 'Gustavo', 'Empleado', 'Demo', 'gustavo.empleado@example.com', c_hash_empleado);
         ensure_user_role(v_id, v_role_emp);
         ensure_empleado(v_id, NULL, 'Empleado', 850000);
-        v_id := ensure_user(33333333, 'Gustavo', 'Cliente', 'Demo', 'gustavo.cliente@example.com');
+        v_id := ensure_user(33333333, 'Gustavo', 'Cliente', 'Demo', 'gustavo.cliente@example.com', c_hash_cliente);
         ensure_user_role(v_id, v_role_user);
+        ensure_cliente(v_id);
     END;
 
     -- Empleados demo

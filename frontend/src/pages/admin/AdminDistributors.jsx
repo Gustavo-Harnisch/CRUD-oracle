@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { listProviders, createProvider, updateProvider, deleteProvider } from "../../services/providerService";
+import { listRegions, listCitiesByRegion } from "../../services/locationService";
 import { createPurchase } from "../../services/purchaseService";
 import { useAuth } from "../../context/AuthContext";
 import { PAGE_STATUS, getStatusClasses } from "../../utils/pageStatus";
 
-const emptyForm = { nombre: "", contacto: "", telefono: "", region: "" };
+const emptyForm = { nombre: "", contacto: "", telefono: "", regionId: "", cityId: "" };
 
 const AdminDistributors = () => {
   const { logout, user } = useAuth();
@@ -13,6 +14,9 @@ const AdminDistributors = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [filters, setFilters] = useState({ search: "", region: "" });
+  const [regions, setRegions] = useState([]);
+  const [cities, setCities] = useState([]);
+  const [loadingCities, setLoadingCities] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
   const isAdmin = Array.isArray(user?.roles) && user.roles.map((r) => String(r).toUpperCase()).includes("ADMIN");
@@ -30,28 +34,76 @@ const AdminDistributors = () => {
     }
   };
 
+  const loadRegions = async () => {
+    try {
+      const data = await listRegions();
+      setRegions(data);
+    } catch (err) {
+      setError("No se pudieron cargar las regiones.");
+    }
+  };
+
+  const fetchCities = async (regionId, keepCity = false) => {
+    if (!regionId) {
+      setCities([]);
+      if (!keepCity) setForm((p) => ({ ...p, cityId: "" }));
+      return;
+    }
+    setLoadingCities(true);
+    try {
+      const data = await listCitiesByRegion(regionId);
+      setCities(data);
+      if (!keepCity) setForm((p) => ({ ...p, cityId: "" }));
+    } catch (err) {
+      setError("No se pudieron cargar las ciudades.");
+      setCities([]);
+      if (!keepCity) setForm((p) => ({ ...p, cityId: "" }));
+    } finally {
+      setLoadingCities(false);
+    }
+  };
+
   useEffect(() => {
     load();
+    loadRegions();
   }, []);
 
   const filtered = useMemo(() => {
     return suppliers.filter((s) => {
-      const txt = filters.search
-        ? `${s.nombre} ${s.contacto} ${s.telefono}`.toLowerCase().includes(filters.search.toLowerCase())
+      const searchText = filters.search
+        ? `${s.nombre} ${s.contacto} ${s.telefono} ${s.regionNombre || ""} ${s.cityNombre || ""}`
+            .toLowerCase()
+            .includes(filters.search.toLowerCase())
         : true;
-      const reg = filters.region ? (s.region || "").toLowerCase().includes(filters.region.toLowerCase()) : true;
-      return txt && reg;
+      const regionText = filters.region
+        ? `${s.regionNombre || ""} ${s.cityNombre || ""}`.toLowerCase().includes(filters.region.toLowerCase())
+        : true;
+      return searchText && regionText;
     });
   }, [suppliers, filters]);
 
+  const handleRegionChange = (value) => {
+    const regionId = value ? Number(value) : "";
+    setForm((p) => ({ ...p, regionId, cityId: "" }));
+    fetchCities(regionId, false);
+  };
+
   const handleEdit = (sup) => {
     setEditingId(sup.id);
-    setForm({ nombre: sup.nombre, contacto: sup.contacto, telefono: sup.telefono, region: sup.region });
+    setForm({
+      nombre: sup.nombre,
+      contacto: sup.contacto || sup.contact || "",
+      telefono: sup.telefono || "",
+      regionId: sup.regionId || "",
+      cityId: sup.cityId || ""
+    });
+    fetchCities(sup.regionId, true);
   };
 
   const handleReset = () => {
     setEditingId(null);
     setForm(emptyForm);
+    setCities([]);
   };
 
   const handleSubmit = async () => {
@@ -62,7 +114,8 @@ const AdminDistributors = () => {
         nombre: form.nombre,
         direccion: null,
         telefono: form.telefono,
-        regionId: null,
+        regionId: form.regionId || null,
+        cityId: form.cityId || null,
         correo: form.contacto,
       };
       if (editingId) {
@@ -181,12 +234,38 @@ const AdminDistributors = () => {
                 </div>
                 <div className="col-md-6">
                   <label className="form-label">Región</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    value={form.region}
-                    onChange={(e) => setForm((p) => ({ ...p, region: e.target.value }))}
-                  />
+                  <select
+                    className="form-select"
+                    value={form.regionId}
+                    onChange={(e) => handleRegionChange(e.target.value)}
+                  >
+                    <option value="">Selecciona región</option>
+                    {regions.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="col-md-6">
+                  <label className="form-label">Ciudad</label>
+                  <select
+                    className="form-select"
+                    value={form.cityId}
+                    onChange={(e) =>
+                      setForm((p) => ({ ...p, cityId: e.target.value ? Number(e.target.value) : "" }))
+                    }
+                    disabled={!form.regionId || loadingCities}
+                  >
+                    <option value="">
+                      {!form.regionId ? "Primero elige región" : loadingCities ? "Cargando..." : "Selecciona ciudad"}
+                    </option>
+                    {cities.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.nombre}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div className="col-12 d-flex gap-2">
                   <button className="btn btn-primary" type="button" onClick={handleSubmit} disabled={saving}>
@@ -209,7 +288,7 @@ const AdminDistributors = () => {
               <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
                 <div>
                   <h2 className="h6 mb-1">Listado</h2>
-                  <p className="text-muted small mb-0">Filtra por nombre, correo o región.</p>
+                  <p className="text-muted small mb-0">Filtra por nombre, correo, región o ciudad.</p>
                 </div>
                 <div className="d-flex gap-2 flex-wrap">
                   <button
@@ -254,22 +333,24 @@ const AdminDistributors = () => {
                       <th>Contacto</th>
                       <th>Teléfono</th>
                       <th>Región</th>
+                      <th>Ciudad</th>
                       <th className="text-end">Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
                     {loading && (
                       <tr>
-                        <td colSpan={6} className="py-3 text-muted">Cargando...</td>
+                        <td colSpan={7} className="py-3 text-muted">Cargando...</td>
                       </tr>
                     )}
                     {!loading && filtered.map((s) => (
                       <tr key={s.id}>
                         <td className="py-3">{s.id}</td>
                         <td className="py-3 fw-semibold">{s.nombre}</td>
-                        <td className="py-3 text-muted">{s.contacto}</td>
+                        <td className="py-3 text-muted">{s.contacto || s.contact || "-"}</td>
                         <td className="py-3">{s.telefono}</td>
-                        <td className="py-3">{s.region}</td>
+                        <td className="py-3">{s.regionNombre || "-"}</td>
+                        <td className="py-3">{s.cityNombre || "-"}</td>
                         <td className="text-end py-3">
                           <div className="btn-group btn-group-sm">
                             {isAdmin && (
@@ -295,7 +376,7 @@ const AdminDistributors = () => {
                     ))}
                     {filtered.length === 0 && (
                       <tr>
-                        <td colSpan={6} className="py-3 text-muted small">
+                        <td colSpan={7} className="py-3 text-muted small">
                           Sin resultados.
                         </td>
                       </tr>

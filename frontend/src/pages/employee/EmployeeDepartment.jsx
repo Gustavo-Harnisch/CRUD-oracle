@@ -14,17 +14,21 @@ const EmployeeDepartment = () => {
   const [team, setTeam] = useState([]);
   const [directory, setDirectory] = useState([]);
   const [dirSearch, setDirSearch] = useState("");
-  const [error, setError] = useState("");
+  const [teamError, setTeamError] = useState("");
+  const [dirError, setDirError] = useState("");
+  const [loadingTeam, setLoadingTeam] = useState(false);
+  const [loadingDir, setLoadingDir] = useState(false);
 
   const departmentName = user?.department || user?.departamento || "N/D";
 
   const greeting = useMemo(() => user?.name || "Colaborador", [user?.name]);
 
   useEffect(() => {
-    const load = async () => {
-      setError("");
+    const loadTeam = async () => {
+      setTeamError("");
+      setLoadingTeam(true);
       try {
-        const [teamData, dirData] = await Promise.all([listTeam(), listDirectory()]);
+        const teamData = await listTeam();
         const normalizedTeam = (teamData || []).map((emp) => ({
           name: emp.nombre || emp.name,
           role: emp.cargo || emp.rol || "N/D",
@@ -34,15 +38,34 @@ const EmployeeDepartment = () => {
           status: emp.estadoLaboral || emp.status || "N/D",
         }));
         setTeam(Array.isArray(normalizedTeam) ? normalizedTeam : []);
-        setDirectory(Array.isArray(dirData) ? dirData : []);
       } catch (err) {
-        console.error(err);
-        setError("No se pudieron cargar los datos de tu equipo.");
+        console.error("Error cargando equipo", err);
+        const msg = err?.response?.data?.message || "No se pudieron cargar los datos de tu equipo.";
+        setTeamError(msg);
         setTeam([]);
-        setDirectory([]);
+      } finally {
+        setLoadingTeam(false);
       }
     };
-    load();
+
+    const loadDirectory = async () => {
+      setDirError("");
+      setLoadingDir(true);
+      try {
+        const dirData = await listDirectory();
+        setDirectory(Array.isArray(dirData) ? dirData : []);
+      } catch (err) {
+        console.error("Error cargando directorio", err);
+        const msg = err?.response?.data?.message || "No se pudo cargar el directorio.";
+        setDirError(msg);
+        setDirectory([]);
+      } finally {
+        setLoadingDir(false);
+      }
+    };
+
+    loadTeam();
+    loadDirectory();
   }, []);
 
   const filteredDirectory = useMemo(() => {
@@ -97,6 +120,13 @@ const EmployeeDepartment = () => {
                 </tr>
               </thead>
               <tbody>
+                {loadingTeam && (
+                  <tr>
+                    <td colSpan={6} className="text-muted small py-3">
+                      Cargando equipo...
+                    </td>
+                  </tr>
+                )}
                 {team.map((member) => (
                   <tr key={`${member.name}-${member.email || member.contact}`}>
                     <td className="fw-semibold">{member.name}</td>
@@ -119,7 +149,7 @@ const EmployeeDepartment = () => {
               </tbody>
             </table>
           </div>
-          {error && <p className="text-danger small mt-3 mb-0">{error}</p>}
+          {teamError && <p className="text-danger small mt-3 mb-0">{teamError}</p>}
         </div>
       </div>
 
@@ -156,6 +186,13 @@ const EmployeeDepartment = () => {
                 </tr>
               </thead>
               <tbody>
+                {loadingDir && (
+                  <tr>
+                    <td colSpan={6} className="text-muted small py-3">
+                      Cargando directorio...
+                    </td>
+                  </tr>
+                )}
                 {filteredDirectory.map((emp) => (
                   <tr key={`${emp.id || emp.usuarioId}-${emp.email}`}>
                     <td>{emp.id || emp.usuarioId}</td>
@@ -177,6 +214,7 @@ const EmployeeDepartment = () => {
                 )}
               </tbody>
             </table>
+          {dirError && <p className="text-danger small mt-3 mb-0">{dirError}</p>}
           </div>
         </div>
       </div>

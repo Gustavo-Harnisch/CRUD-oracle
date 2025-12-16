@@ -1,6 +1,6 @@
-PROMPT Semilla demo (departamentos, empleados, servicios, productos) sin acentos. Password: Demo1234
+PROMPT Semilla demo (departamentos, empleados, servicios, productos) sin acentos. Password empleados demo: Demo1234
 DECLARE
-    c_hash CONSTANT VARCHAR2(60) := '$2a$10$294QjQAUurCbQj8NbaTZ7eyPagN2TNIlT2H2CQZY3sLTe/pcss/oO';
+    c_hash CONSTANT VARCHAR2(60) := '$2a$10$R4gAes1yY3W08LJi84SX2eHI1y19clorv1PelbHyML4lQxCalWZU6';
     v_estado_activo NUMBER;
     v_estado_lab_activo NUMBER;
     v_role_emp NUMBER;

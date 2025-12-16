@@ -1,7 +1,7 @@
 // src/pages/employee/EmployeeServices.jsx
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
-import { listServices } from "../../services/serviceService";
+import { listServices, fetchAllowedServiceTypes } from "../../services/serviceService";
 import {
   listProducts,
   createProduct,
@@ -24,9 +24,7 @@ const EmployeeServices = () => {
     [user],
   );
   const isAdmin = roles.includes("ADMIN");
-  const allowedTypes = isAdmin
-    ? null
-    : ["HOUSEKEEPING", "ROOM SERVICE", "MANTENCION", "SPA"]; // Tipos visibles para EMPLOYEE
+  const [allowedTypes, setAllowedTypes] = useState(isAdmin ? null : []);
   const [services, setServices] = useState([]);
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -49,14 +47,19 @@ const EmployeeServices = () => {
       setError("");
       setLoading(true);
       try {
+        const typesApi = await fetchAllowedServiceTypes().catch(() => (isAdmin ? null : []));
+        const allowed = isAdmin ? null : Array.isArray(typesApi) ? typesApi : [];
+        setAllowedTypes(allowed);
         const data = await listServices();
         const filteredByRole =
-          allowedTypes === null
+          allowed === null
             ? data
-            : (data || []).filter((svc) =>
-                allowedTypes.includes((svc.tipo || "").trim().toUpperCase()),
-              );
-        setServices(filteredByRole);
+            : (data || []).filter((svc) => {
+                const t = (svc.tipo || "").trim().toUpperCase();
+                if (t.includes("PAQU")) return false; // ocultar paquetes
+                return allowed.includes(t);
+              });
+        setServices(filteredByRole || []);
       } catch (err) {
         console.error(err);
         setError("No se pudieron cargar los servicios.");
@@ -73,7 +76,7 @@ const EmployeeServices = () => {
           allowedTypes === null
             ? data
             : (data || []).filter((p) => allowedTypes.includes((p.tipo || "").trim().toUpperCase()));
-        setProducts(filteredByRole);
+        setProducts(filteredByRole || []);
       } catch (err) {
         console.error(err);
         setProductError("No se pudieron cargar los productos.");
@@ -191,17 +194,17 @@ const EmployeeServices = () => {
     if (roleSet.has("ADMIN")) {
       return {
         title: "Categorías sugeridas (ADMIN)",
-        items: ["PAQUETE", "SPA", "EXTERIOR", "ROOM SERVICE", "HOUSEKEEPING", "MANTENCION", "EVENTOS", "TRANSFER"],
+        items: ["SPA", "EXTERIOR", "ROOM SERVICE", "HOUSEKEEPING", "MANTENCION", "EVENTOS", "TRANSFER"],
       };
     }
     if (roleSet.has("EMPLOYEE")) {
       return {
         title: "Categorías según tu rol",
-        items: ["HOUSEKEEPING", "ROOM SERVICE", "MANTENCION", "SPA (solo si aplica)"],
+        items: allowedTypes && allowedTypes.length ? allowedTypes : ["HOUSEKEEPING", "ROOM SERVICE", "MANTENCION"],
       };
     }
     return null;
-  }, [user]);
+  }, [user, allowedTypes]);
 
   return (
     <div className="container py-4">

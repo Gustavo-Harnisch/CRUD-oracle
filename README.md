@@ -119,6 +119,7 @@ Frontend en `http://localhost:5173`. Si cambiaste `PORT`, alinea `VITE_API_URL`.
 - Admin: `gustavo.admin@example.com` / `Gustavo_make_ALL2004.`
 - Empleado: `gustavo.empleado@example.com` / `gustavo_empleado`
 - Cliente: `gustavo.cliente@example.com` / `gustavo_cliente`
+- Resto de cuentas demo (IDs 40000001+): todas usan `Demo1234` (ver `db/demo_credentials.txt` para detalle).
 
 ---
 

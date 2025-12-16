@@ -8,12 +8,31 @@ const { firstOutValue } = require('../utils/oracle');
 
 const router = express.Router();
 
+const SQL_ALLOWED_TYPES = `
+  SELECT DISTINCT NVL(TRIM(UPPER(h.CATEGORIA)), NVL(TRIM(UPPER(h.TIPO)), NULL)) AS TIPO
+  FROM JRGY_EMPLEADO_HABILIDAD h
+  JOIN JRGY_EMPLEADO e ON e.COD_EMPLEADO = h.COD_EMPLEADO
+  WHERE e.COD_USUARIO = :uid
+`;
+
+async function fetchAllowedTypes(conn, user) {
+  if (!user || hasRole(user, ['ADMIN'])) return null;
+  const res = await conn.execute(SQL_ALLOWED_TYPES, { uid: user.id });
+  const rows = res.rows || [];
+  const tipos = rows
+    .map((r) => (r.TIPO !== undefined ? r.TIPO : r[0]))
+    .filter(Boolean)
+    .map((t) => String(t).trim().toUpperCase());
+  return Array.from(new Set(tipos));
+}
+
 function mapProduct(row) {
   if (!row || row.COD_PRODUCTO === undefined || row.COD_PRODUCTO === null) return null;
   return {
     id: row.COD_PRODUCTO,
     nombre: row.NOMBRE_PRODUCTO,
-    tipo: row.TIPO_PRODUCTO,
+    // Preferimos el nombre de tipo de servicio; si no viene, devolvemos el id.
+    tipo: row.TIPO_SERVICIO || row.TIPO_PRODUCTO || row.COD_TIPO_SERVICIO,
     precio: row.PRECIO_PRODUCTO,
     cantidad: row.CANTIDAD_PRODUCTO,
     stock: row.STOCK_PRODUCTO,
@@ -22,10 +41,40 @@ function mapProduct(row) {
   };
 }
 
+// Normaliza el tipo recibido (id o nombre) a un id válido de JRGY_CAT_TIPO_SERVICIO.
+async function resolveTipoId(conn, raw) {
+  if (raw === undefined || raw === null || raw === '') return null;
+  const maybeNumber = Number(raw);
+  // Si viene numérico (o string numérico), úsalo directo.
+  if (!Number.isNaN(maybeNumber)) return maybeNumber;
+
+  // Caso nombre: buscar por nombre en mayúsculas.
+  const name = String(raw || '').trim().toUpperCase();
+  if (!name) return null;
+  const res = await conn.execute(
+    `SELECT COD_TIPO_SERVICIO FROM JRGY_CAT_TIPO_SERVICIO WHERE UPPER(NOMBRE)=:n`,
+    { n: name }
+  );
+  const found = (res.rows || [])[0]?.COD_TIPO_SERVICIO;
+  if (!found) throw new AppError('Categoría de producto/servicio no existe', 422);
+  return found;
+}
+
 router.get(
   '/products',
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (req, res) => {
+    const token = extractToken(req);
+    let user = null;
+    if (token) {
+      try {
+        user = await withConnection((conn) => requireUserFromToken(conn, token, false));
+      } catch (err) {
+        user = null;
+      }
+    }
+
     const products = await withConnection(async (conn) => {
+      const allowedTypes = await fetchAllowedTypes(conn, user);
       const result = await conn.execute(
         `BEGIN JRGY_PRO_PRODUCTO_LISTAR(:cur); END;`,
         { cur: { dir: oracledb.BIND_OUT, type: oracledb.CURSOR } }
@@ -33,7 +82,9 @@ router.get(
       const cur = result.outBinds.cur;
       const rows = (await cur.getRows()) || [];
       await cur.close();
-      return rows.map(mapProduct).filter(Boolean);
+      const all = rows.map(mapProduct).filter(Boolean);
+      if (!allowedTypes) return all;
+      return all.filter((p) => allowedTypes.includes(String(p.tipo || '').trim().toUpperCase()));
     });
 
     res.json(products);
@@ -59,11 +110,12 @@ router.post(
     if (precio < 0 || cantidad < 0 || stock < 0 || (umbral !== null && umbral < 0)) throw new AppError('Valores inválidos', 400);
 
     const product = await withConnection(async (conn) => {
+      const tipoId = await resolveTipoId(conn, tipo);
       const result = await conn.execute(
         `BEGIN JRGY_PRO_PRODUCTO_CREAR(:nombre, :tipo, :precio, :cantidad, :stock, :umbral, :id); END;`,
         {
           nombre,
-          tipo,
+          tipo: tipoId,
           precio,
           cantidad,
           stock,
@@ -111,9 +163,10 @@ router.put(
 
     await withConnection(async (conn) => {
       try {
+        const tipoId = await resolveTipoId(conn, tipo);
         await conn.execute(
           `BEGIN JRGY_PRO_PRODUCTO_ACTUALIZAR(:id, :nombre, :tipo, :precio, :cantidad, :stock, :umbral); END;`,
-          { id, nombre, tipo, precio, cantidad, stock, umbral },
+          { id, nombre, tipo: tipoId, precio, cantidad, stock, umbral },
           { autoCommit: true }
         );
       } catch (err) {

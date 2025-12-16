@@ -249,7 +249,6 @@ const AdminRooms = () => {
   const resetForm = () => {
     setEditingId(null);
     setForm(emptyForm);
-    setOriginalOcupanteId(null);
   };
 
   const handleTypeChange = async (value) => {

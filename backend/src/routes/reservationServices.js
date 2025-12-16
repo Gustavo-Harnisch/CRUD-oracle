@@ -6,7 +6,9 @@ const { extractToken, requireUserFromToken } = require('../services/authService'
 const { hasRole } = require('../utils/authz');
 const { firstOutValue } = require('../utils/oracle');
 
-const EDITABLE_STATES = ['CREADA', 'CONFIRMADA', 'EN_PROCESO'];
+const EDITABLE_STATES = new Set(['CREADA', 'CONFIRMADA', 'EN_PROCESO']);
+
+const normalizeEstado = (value) => String(value || '').trim().toUpperCase().replace(/\s+/g, '_');
 
 const router = express.Router();
 
@@ -36,18 +38,18 @@ async function fetchReserva(conn, id) {
   return (res.rows || [])[0] || null;
 }
 
-async function ensureReservationAccess(conn, user, reservaId) {
+async function ensureReservationAccess(conn, user, reservaId, { allowStaff = true } = {}) {
   const reserva = await fetchReserva(conn, reservaId);
   if (!reserva) throw new AppError('Reserva no encontrada', 404);
   const isOwner = reserva.COD_USUARIO === user.id;
   const isStaff = hasRole(user, ['ADMIN', 'EMPLOYEE']);
-  if (!isOwner && !isStaff) throw new AppError('No autorizado', 403);
+  if (!isOwner && !(allowStaff && isStaff)) throw new AppError('No autorizado', 403);
   return reserva;
 }
 
 function ensureEditable(reserva) {
-  const estadoNom = (reserva.ESTADO_RESERVA || '').toUpperCase();
-  if (!EDITABLE_STATES.includes(estadoNom)) {
+  const estadoNom = normalizeEstado(reserva.ESTADO_RESERVA);
+  if (!EDITABLE_STATES.has(estadoNom)) {
     throw new AppError('La reserva no permite agregar o editar servicios en su estado actual', 409);
   }
 }
@@ -130,16 +132,23 @@ async function updateReservationTotals(conn, reservaId) {
 }
 
 function toItemDTO(row) {
+  const fechaServicio =
+    row.FECHA_SERVICIO ?? row.fecha_servicio ?? row.FECHA ?? row.fecha ?? null;
+  const servicioNombre = row.NOMBRE ?? row.nombre ?? row.SERVICIO_NOMBRE ?? row.servicio_nombre ?? null;
+  const precioUnit = row.PRECIO_UNIT ?? row.precio_unit ?? row.PRECIO ?? row.precio ?? null;
   return {
     id: row.COD_RESERVA_SERVICIO,
     reservaId: row.COD_RESERVA,
     servicioId: row.COD_SERVICIO,
-    servicioNombre: row.NOMBRE,
-    tipo: row.TIPO,
-    fecha: row.FECHA_SERVICIO,
+    servicioNombre,
+    nombreServicio: servicioNombre,
+    tipo: row.TIPO ?? row.TIPO_SERVICIO ?? row.tipo_servicio ?? null,
+    fecha: fechaServicio,
+    fechaServicio,
     hora: row.HORA,
     cantidad: row.CANTIDAD,
-    precioUnit: row.PRECIO_UNIT,
+    precioUnit,
+    precio: precioUnit,
     total: row.TOTAL,
     nota: row.NOTA,
     estado: row.ESTADO,
@@ -191,7 +200,7 @@ router.post(
     if (!Number.isFinite(cantidad) || cantidad <= 0) throw new AppError('Cantidad inválida', 400);
 
     await withConnection(async (conn) => {
-      const reserva = await ensureReservationAccess(conn, user, reservaId);
+      const reserva = await ensureReservationAccess(conn, user, reservaId, { allowStaff: false });
       ensureEditable(reserva);
 
       const service = await fetchService(conn, serviceId);
@@ -221,7 +230,7 @@ router.post(
               rs.COD_RESERVA,
               rs.COD_SERVICIO,
               s.NOMBRE,
-              s.TIPO,
+              ts.NOMBRE AS TIPO_SERVICIO,
               rs.FECHA_SERVICIO,
               rs.HORA,
               rs.CANTIDAD,
@@ -233,6 +242,7 @@ router.post(
               rs.UPDATED_AT
             FROM JRGY_RESERVA_SERVICIO rs
             LEFT JOIN JRGY_SERVICIO s ON s.COD_SERVICIO = rs.COD_SERVICIO
+            LEFT JOIN JRGY_CAT_TIPO_SERVICIO ts ON ts.COD_TIPO_SERVICIO = s.COD_TIPO_SERVICIO
             WHERE rs.COD_RESERVA_SERVICIO = :id
           `,
           { id: newId }
@@ -273,14 +283,15 @@ router.put(
     }
 
     await withConnection(async (conn) => {
-      const reserva = await ensureReservationAccess(conn, user, reservaId);
+      const reserva = await ensureReservationAccess(conn, user, reservaId, { allowStaff: false });
       ensureEditable(reserva);
 
       const currentRes = await conn.execute(
         `
-          SELECT rs.*, s.COD_SERVICIO, s.NOMBRE, s.TIPO, s.PRECIO
+          SELECT rs.*, s.COD_SERVICIO, s.NOMBRE, ts.NOMBRE AS TIPO_SERVICIO, s.PRECIO
           FROM JRGY_RESERVA_SERVICIO rs
           LEFT JOIN JRGY_SERVICIO s ON s.COD_SERVICIO = rs.COD_SERVICIO
+          LEFT JOIN JRGY_CAT_TIPO_SERVICIO ts ON ts.COD_TIPO_SERVICIO = s.COD_TIPO_SERVICIO
           WHERE rs.COD_RESERVA_SERVICIO = :itemId AND rs.COD_RESERVA = :resId
         `,
         { itemId, resId: reservaId }
@@ -322,7 +333,7 @@ router.put(
             rs.COD_RESERVA,
             rs.COD_SERVICIO,
             s.NOMBRE,
-            s.TIPO,
+            ts.NOMBRE AS TIPO_SERVICIO,
             rs.FECHA_SERVICIO,
             rs.HORA,
             rs.CANTIDAD,
@@ -334,6 +345,7 @@ router.put(
             rs.UPDATED_AT
           FROM JRGY_RESERVA_SERVICIO rs
           LEFT JOIN JRGY_SERVICIO s ON s.COD_SERVICIO = rs.COD_SERVICIO
+          LEFT JOIN JRGY_CAT_TIPO_SERVICIO ts ON ts.COD_TIPO_SERVICIO = s.COD_TIPO_SERVICIO
           WHERE rs.COD_RESERVA_SERVICIO = :id
         `,
         { id: itemId }
@@ -354,7 +366,7 @@ router.delete(
     if (!reservaId || !itemId) throw new AppError('ID inválido', 400);
 
     await withConnection(async (conn) => {
-      const reserva = await ensureReservationAccess(conn, user, reservaId);
+      const reserva = await ensureReservationAccess(conn, user, reservaId, { allowStaff: false });
       ensureEditable(reserva);
 
       try {
